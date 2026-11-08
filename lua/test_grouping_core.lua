@@ -366,6 +366,132 @@ local mixed = { [5] = { raw, jpg }, [6] = { jpg, rec(9, "z.cr2") }, [7] = { r7 }
 check("plan_native skips the whole frame when one of its images is in a hand-made group",
     plan_str(C.plan_native(pair_units, { [5] = 1, [7] = 1 }, {}, mixed)), "detach ; groups ; skipped 2")
 
+-- run_layers with timing off ----------------------------------------------------
+local untimed_off = C.run_layers(run_units, { gap = 2, timing = false })
+check("timing off: every unit, timed or not, shares group 1", keys(untimed_off.burst_of) .. " / "
+    .. untimed_off.burst_of[1] .. untimed_off.burst_of[4] .. untimed_off.burst_of[6], "1 + 2 + 3 + 4 + 5 + 6 / 111")
+check("timing off: result.timing is false", untimed_off.timing, false)
+check("timing default: result.timing is true", C.run_layers(run_units, { gap = 2 }).timing, true)
+local cam_only = C.run_layers(run_units, { timing = false, camera = true })
+check("timing off + camera: splits by camera only", cam_only.final_of[1] == cam_only.final_of[4]
+    and cam_only.final_of[1] ~= cam_only.final_of[2], true)
+local based_off = C.run_layers({ cu(1, { epoch = 0 }), cu(2, { epoch = 100 }), cu(3, { epoch = 0 }), cu(4, { epoch = 500 }) },
+    { timing = false, base_of = { [1] = 1, [2] = 2 } })
+check("timing off + base_of: the rest share one group after the base groups",
+    based_off.burst_of[1] .. based_off.burst_of[2] .. based_off.burst_of[3] .. based_off.burst_of[4], "1233")
+local no_burst = C.wanted_tags(pair, C.run_layers(pair, { timing = false }), STAMP, {})
+check("wanted_tags: timing off writes no Burst tag", keys(no_burst[12]),
+    "Assisted Grouping|2026-11-08 22:45:10|Group|0001")
+
+-- parse_gap --------------------------------------------------------------------
+check("parse_gap: integer text", C.parse_gap("2"), 2)
+check("parse_gap: decimal point", C.parse_gap("0.5"), 0.5)
+check("parse_gap: decimal comma", C.parse_gap("1,5"), 1.5)
+check("parse_gap: surrounding spaces", C.parse_gap("  3 "), 3)
+check("parse_gap: leading dot", C.parse_gap(".25"), 0.25)
+check("parse_gap: number input", C.parse_gap(2), 2)
+check("parse_gap: zero is rejected", C.parse_gap("0"), nil)
+check("parse_gap: negative is rejected", C.parse_gap("-1"), nil)
+check("parse_gap: hex is rejected", C.parse_gap("0x10"), nil)
+check("parse_gap: exponent is rejected", C.parse_gap("1e3"), nil)
+check("parse_gap: blank is rejected", C.parse_gap(""), nil)
+check("parse_gap: lone dot is rejected", C.parse_gap("."), nil)
+check("parse_gap: nil is rejected", C.parse_gap(nil), nil)
+check("parse_gap: two dots are rejected", C.parse_gap("1.2.3"), nil)
+
+-- panel_options ------------------------------------------------------------------
+local function panel(over)
+    local p = { timing = true, gap_text = "2", camera = false, tag = "", parent = "",
+        refine = false, write_tags = true, native_groups = false }
+    for k, v in pairs(over or {}) do p[k] = v end
+    return p
+end
+local o, why = C.panel_options(panel({ write_tags = false, native_groups = false }))
+check("panel_options: both outputs off refuses", tostring(o) .. " / " .. tostring(why), "nil / " .. C.ERR_NO_OUTPUT)
+o, why = C.panel_options(panel({ gap_text = "abc" }))
+check("panel_options: bad gap with timing on refuses", why, C.ERR_BAD_GAP)
+o = C.panel_options(panel({ gap_text = "abc", timing = false, camera = true }))
+check("panel_options: bad gap ignored with timing off", o and o.gap, nil)
+check("panel_options: timing off passes timing = false", o and o.timing, false)
+o, why = C.panel_options(panel({ timing = false }))
+check("panel_options: no layer and no refine refuses", why, C.ERR_NO_LAYER)
+o = C.panel_options(panel({ timing = false, refine = true, native_groups = true, write_tags = false }))
+check("panel_options: refine alone is enough", o ~= nil and o.refine and o.native_groups and not o.write_tags, true)
+o = C.panel_options(panel({ gap_text = "0,5", tag = "  Cars|Red ", parent = " Cars|Number| " }))
+check("panel_options: gap parsed, tag trimmed, trailing | dropped from parent",
+    o.gap .. " / " .. o.tag .. " / " .. o.parent, "0.5 / Cars|Red / Cars|Number")
+o = C.panel_options(panel({ tag = "   ", parent = "|" }))
+check("panel_options: blank tag and parent become nil", o.tag == nil and o.parent == nil, true)
+
+-- plan_clear -----------------------------------------------------------------------
+local clear_ledger = {
+    [1] = { tags = { ["AG|a"] = true, ["AG|gone"] = true }, native = 1 },
+    [2] = { tags = {}, native = 1 },
+    [3] = { tags = { ["AG|b"] = true }, native = 3 },
+    [4] = { tags = {}, native = 9 },
+}
+local clear_records = {
+    { id = 1, tags = { ["AG|a"] = true, ["Mine"] = true } },
+    { id = 2, tags = {} },
+    { id = 3, tags = { ["AG|b"] = true } },
+    { id = 4, tags = {} },
+    { id = 5, tags = { ["AG|a"] = true } },
+}
+local clear_members = {
+    [1] = { { id = 1 }, { id = 2 } },
+    [2] = { { id = 1 }, { id = 2 } },
+    [3] = { { id = 3 } },
+    [4] = { { id = 4 }, { id = 7 } },
+    [5] = { { id = 5 } },
+}
+local cplans = C.plan_clear(clear_records, clear_ledger, clear_members)
+local function cplan_str(pl)
+    local out = {}
+    for _, x in ipairs(pl) do
+        out[#out + 1] = string.format("%d:%s:%s", x.id, table.concat(x.detach, ","), tostring(x.ungroup))
+    end
+    return table.concat(out, " ")
+end
+check("plan_clear: ledger tags on the image only, hand tags and unledgered images left",
+    cplan_str(cplans), "1:AG|a:true 2::true 3:AG|b:false 4::false")
+check("plan_clear: a leader alone in its group is not ungrouped", cplans[3].ungroup, false)
+check("plan_clear: an image moved into a hand-made group is not ungrouped", cplans[4].ungroup, false)
+local stale = C.plan_clear({ { id = 2, tags = {} } }, { [2] = { tags = {}, native = 1 }, [6] = { tags = {}, native = 1 } },
+    { [2] = { { id = 2 }, { id = 6 } } })
+check("plan_clear: group still ours after its leader left (another member shares the leader id)",
+    stale[1].ungroup, true)
+
+-- subsec_fractions ------------------------------------------------------------------
+local function srec(id, dir, filename, epoch) return { id = id, dir = dir, filename = filename, epoch = epoch == nil and 100 or epoch } end
+local function near(a, b) return a ~= nil and math.abs(a - b) < 1e-6 end
+local sf, smiss = C.subsec_fractions({ srec(1, "/s", "DSC1.ARW"), srec(2, "/s", "DSC1.JPG") },
+    { [1] = "", [2] = "1780308000.897" })
+check("subsec_fractions: RAW with a blank row borrows its JPEG's fraction", near(sf[1], 0.897) and near(sf[2], 0.897), true)
+check("subsec_fractions: pair leaves nothing missing", smiss, nil)
+sf, smiss = C.subsec_fractions({ srec(1, "/s", "DSC1.ARW") }, { [1] = "" })
+check("subsec_fractions: RAW with no sibling has no fraction", sf[1], nil)
+check("subsec_fractions: RAW with no sibling is reported missing", smiss, 1)
+sf, smiss = C.subsec_fractions({ srec(1, "/s", "DSC1.ARW") }, {})
+check("subsec_fractions: absent row with no sibling is reported missing", smiss, 1)
+sf, smiss = C.subsec_fractions({ srec(2, "/s", "DSC2.JPG") }, { [2] = "1780308000.25" })
+check("subsec_fractions: JPEG alone keeps its own fraction", near(sf[2], 0.25) and smiss == nil, true)
+sf, smiss = C.subsec_fractions({ srec(1, "/s", "DSC1.ARW"), srec(2, "/s", "dsc1.jpg") },
+    { [1] = "", [2] = "1780308000.5" })
+check("subsec_fractions: stem case differs → different frame (frame_key is case-sensitive), no borrow",
+    tostring(sf[1]) .. " / " .. tostring(smiss), "nil / 1")
+sf = C.subsec_fractions({ srec(1, "/s", "DSC1.ARW"), srec(2, "/s", "DSC1.jpg") }, { [1] = "", [2] = "1780308000.5" })
+check("subsec_fractions: extension case is ignored, borrows", near(sf[1], 0.5), true)
+sf, smiss = C.subsec_fractions({ srec(1, "/a", "DSC1.ARW"), srec(2, "/b", "DSC1.JPG") },
+    { [1] = "", [2] = "1780308000.5" })
+check("subsec_fractions: same stem in another folder does not lend", tostring(sf[1]) .. " / " .. tostring(smiss), "nil / 1")
+sf, smiss = C.subsec_fractions({ srec(1, "/s", "DSC1.ARW"), srec(2, "/s", "DSC1.JPG") },
+    { [1] = "1780308000", [2] = "1780308000.5" })
+check("subsec_fractions: a whole-second (non-blank) row does not borrow", tostring(sf[1]) .. " / " .. tostring(smiss), "nil / 1")
+sf, smiss = C.subsec_fractions({ srec(1, "/s", "DSC1.ARW"), srec(2, "/s", "DSC1.JPG"), srec(3, "/s", "X.JPG", false) },
+    { [1] = "", [2] = "" })
+check("subsec_fractions: blank pair has no fraction; untimed records are ignored",
+    tostring(sf[1]) .. tostring(sf[2]) .. tostring(sf[3]) .. " / " .. tostring(smiss), "nilnilnil / 1")
+
 -- summary --------------------------------------------------------------------
 if failures > 0 then
     print(string.format("%d failure(s)", failures))

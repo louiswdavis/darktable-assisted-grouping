@@ -29,6 +29,37 @@ local function frame_key(image)
     return (image.dir or "") .. "\0" .. stem
 end
 
+-- Sub-second fraction of each timed record from the helper's epoch text (by_id[id]).
+-- A record whose text is blank or absent (Pillow can't read the ZV-E10's ARW)
+-- borrows the fraction of a record of the same frame (frame_key: same dir and
+-- case-sensitive stem, extension ignored) that has its own. Returns id → fraction,
+-- and the id of the first timed record (lowest id) left without one, or nil.
+function M.subsec_fractions(records, by_id)
+    local own, timed = {}, {}
+    for _, r in ipairs(records) do
+        if r.epoch then
+            timed[#timed + 1] = r
+            local s = by_id[r.id]
+            local e = s and s:find(".", 1, true) and tonumber(s)
+            if e then own[r.id] = e - math.floor(e) end
+        end
+    end
+    local by_frame = {}
+    for _, r in ipairs(timed) do
+        local k = frame_key(r)
+        if own[r.id] and by_frame[k] == nil then by_frame[k] = own[r.id] end
+    end
+    table.sort(timed, function(a, b) return a.id < b.id end)
+    local frac_of, missing = {}, nil
+    for _, r in ipairs(timed) do
+        local s = by_id[r.id]
+        local f = own[r.id]
+        if f == nil and (s == nil or s == "") then f = by_frame[frame_key(r)] end
+        if f then frac_of[r.id] = f elseif not missing then missing = r.id end
+    end
+    return frac_of, missing
+end
+
 function M.collapse(images)
     local by_key, units = {}, {}
     for _, image in ipairs(images) do
@@ -169,8 +200,16 @@ function M.divide(group_of, key_of, units)
     return out
 end
 
-local function burst_layer(units, gap, base_of)
-    if not base_of then return M.cluster_by_time(units, gap) end
+-- With timing off, every unit outside base_of shares one group, timed or not.
+local function one_group(units)
+    local group_of = {}
+    for _, unit in ipairs(units) do group_of[unit.id] = 1 end
+    return group_of
+end
+
+local function burst_layer(units, gap, base_of, timing)
+    local cluster = timing and function(list) return M.cluster_by_time(list, gap) end or one_group
+    if not base_of then return cluster(units) end
     local burst_of, rest, max_base = {}, {}, 0
     for _, unit in ipairs(units) do
         local grp = base_of[unit.id]
@@ -181,16 +220,18 @@ local function burst_layer(units, gap, base_of)
             rest[#rest + 1] = unit
         end
     end
-    for id, grp in pairs(M.cluster_by_time(rest, gap)) do
+    for id, grp in pairs(cluster(rest)) do
         burst_of[id] = max_base + grp
     end
     return burst_of
 end
 
--- opts = { gap, camera = bool, tag = string|nil, parent = string|nil, base_of = group_of|nil }
+-- opts = { gap, timing = bool (default true), camera = bool, tag = string|nil,
+-- parent = string|nil, base_of = group_of|nil }. With timing false, burst_of is
+-- base_of plus one group for the rest, and result.timing is false.
 function M.run_layers(units, opts)
-    local result = {}
-    result.burst_of = burst_layer(units, opts.gap, opts.base_of)
+    local result = { timing = opts.timing ~= false }
+    result.burst_of = burst_layer(units, opts.gap, opts.base_of, result.timing)
     result.final_of = result.burst_of
     if opts.camera then
         result.camera_of = M.divide(result.final_of, M.camera_key, units)
@@ -230,7 +271,9 @@ function M.wanted_tags(units, result, stamp, opts)
     for _, unit in ipairs(units) do
         local set = {}
         set[M.group_tag(stamp, "Group", result.final_of[unit.id])] = true
-        set[M.group_tag(stamp, "Burst", result.burst_of[unit.id])] = true
+        if result.timing ~= false then
+            set[M.group_tag(stamp, "Burst", result.burst_of[unit.id])] = true
+        end
         if result.camera_of then
             local cam = M.camera_key(unit)
             set[M.group_tag(stamp, "Camera", nil, cam ~= "" and cam or "unknown")] = true
@@ -448,6 +491,88 @@ function M.plan_native(units, final_of, ledger, members_of)
     for id in pairs(detach) do plan.detach[#plan.detach + 1] = id end
     table.sort(plan.detach)
     return plan
+end
+
+-- Panel options ----------------------------------------------------------------
+
+local function trim(s)
+    return (s or ""):match("^%s*(.-)%s*$")
+end
+
+-- Burst gap from the preference text: a number above 0, `.` or `,` as the decimal
+-- mark. Nil for anything else (hex, exponents, signs, blank).
+function M.parse_gap(s)
+    local t = trim(type(s) == "number" and tostring(s) or s):gsub(",", ".")
+    if not t:match("^%d*%.?%d*$") or not t:match("%d") then return nil end
+    local n = tonumber(t)
+    if not n or n <= 0 then return nil end
+    return n
+end
+
+M.ERR_NO_OUTPUT = "turn on at least one output (group tags or darktable groups)"
+M.ERR_BAD_GAP = "the burst gap preference must be a number of seconds above 0, e.g. 2 or 0.5"
+M.ERR_NO_LAYER = "turn on at least one layer (burst timing, camera and lens, tag or parent tag), or Refine existing groups"
+
+-- p = { timing, gap_text, camera, tag, parent, refine, write_tags, native_groups } as
+-- the panel reads them. Returns group_images options (blank tag/parent → nil, a
+-- trailing `|` on the parent dropped), or nil and why the run can't start.
+function M.panel_options(p)
+    if not p.write_tags and not p.native_groups then return nil, M.ERR_NO_OUTPUT end
+    local gap = M.parse_gap(p.gap_text)
+    if p.timing and not gap then return nil, M.ERR_BAD_GAP end
+    local tag = trim(p.tag)
+    local parent = trim(p.parent):gsub("|+$", "")
+    local opts = {
+        timing = p.timing and true or false,
+        gap = gap,
+        camera = p.camera and true or false,
+        tag = tag ~= "" and tag or nil,
+        parent = parent ~= "" and parent or nil,
+        refine = p.refine and true or false,
+        write_tags = p.write_tags and true or false,
+        native_groups = p.native_groups and true or false,
+    }
+    if not (opts.timing or opts.camera or opts.tag or opts.parent or opts.refine) then
+        return nil, M.ERR_NO_LAYER
+    end
+    return opts
+end
+
+-- Clear ------------------------------------------------------------------------
+
+-- True when the image's current native group still holds another member of the
+-- ledger group led by `leader`; false when the image was moved or its group is gone.
+local function still_in_ledger_group(id, leader, members, ledger)
+    for _, m in ipairs(members or {}) do
+        local mid = tonumber(m.id)
+        if mid ~= id and (mid == leader or (ledger[mid] and ledger[mid].native == leader)) then
+            return true
+        end
+    end
+    return false
+end
+
+-- What Clear grouping marks does to each selected image with a ledger entry:
+-- detach = sorted ledger tags still on it, ungroup = whether to take it out of a
+-- native group the plugin made. records = { id, tags = set }; members_of[id] = the
+-- image's current native group members ({ id }). Hand-made tags and groups are
+-- never listed. Returns plans in record order.
+function M.plan_clear(records, ledger, members_of)
+    local plans = {}
+    for _, r in ipairs(records) do
+        local entry = ledger[r.id]
+        if entry then
+            local detach = {}
+            for name in pairs(entry.tags or {}) do
+                if r.tags[name] then detach[#detach + 1] = name end
+            end
+            table.sort(detach)
+            local ungroup = entry.native ~= nil
+                and still_in_ledger_group(r.id, entry.native, members_of[r.id], ledger)
+            plans[#plans + 1] = { id = r.id, detach = detach, ungroup = ungroup }
+        end
+    end
+    return plans
 end
 
 return M

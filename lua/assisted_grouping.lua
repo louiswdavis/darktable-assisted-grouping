@@ -79,7 +79,8 @@ function M.parse_helper_results(text)
 end
 
 -- Adds the helper's sub-second fraction to each record's whole-second epoch, only
--- when every manifest row came back with a fraction and the helper says
+-- when every timed frame has a fraction (its own, or borrowed from the JPEG of its
+-- RAW+JPEG pair, see grouping_core.subsec_fractions) and the helper says
 -- `subsecond`. Only the fraction is taken: the helper's whole part (timegm) and
 -- the core's (os.time) can differ by the local offset. Returns "subsecond" or
 -- "whole" and, for "whole", why.
@@ -90,14 +91,9 @@ function M.apply_subsec(records, text)
     if precision ~= "subsecond" then
         return "whole", "the helper reported whole-second precision"
     end
-    local frac_of = {}
-    for _, row in ipairs(rows) do
-        local s = by_id[row[1]]
-        local e = s and s:find(".", 1, true) and tonumber(s)
-        if not e then
-            return "whole", string.format("image %d has no readable sub-second time", row[1])
-        end
-        frac_of[row[1]] = e - math.floor(e)
+    local frac_of, missing = C.subsec_fractions(records, by_id)
+    if missing then
+        return "whole", string.format("image %d has no readable sub-second time", missing)
     end
     for _, r in ipairs(records) do
         if r.epoch and frac_of[r.id] then r.epoch = r.epoch + frac_of[r.id] end
@@ -189,6 +185,22 @@ local PREV_LOG_PATH = dt.configuration.config_dir .. "/assisted_grouping.prev.lo
 local LEDGER_DIR = dt.configuration.config_dir .. "/assisted_grouping"
 local LEDGER_PATH = LEDGER_DIR .. "/ledger.csv"
 
+if dt.gui then
+    dt.preferences.register("assisted_grouping", "python_bin", "file",
+        "Assisted Grouping: Python interpreter",
+        "Python executable with Pillow installed (python/requirements.txt, e.g. .venv\\Scripts\\python.exe). Empty = auto-detect the repo's .venv",
+        "")
+    dt.preferences.register("assisted_grouping", "plugin_folder", "directory",
+        "Assisted Grouping: plugin folder",
+        "The darktable-assisted-grouping folder (holds python/ and .venv). Empty = auto-detect",
+        "")
+    -- A string, not an integer like the sibling plugins' gap: decimals are allowed.
+    dt.preferences.register("assisted_grouping", "burst_gap_seconds", "string",
+        "Assisted Grouping: burst gap (seconds)",
+        "Photos taken closer together than this are one burst. Decimals are allowed (e.g. 0.5 or 1,5); the default is 2",
+        "2")
+end
+
 M.tags_of = function(img)
     local have = {}
     for _, t in ipairs(tags.get_tags(img)) do have[t.name] = true end
@@ -259,11 +271,12 @@ local function notify_error(msg)
     log(msg)
 end
 
-local function start_log(n)
+-- `what` names the job in the header: "group" or "clear".
+local function start_log(what, n)
     flush_log()
     pcall(os.remove, PREV_LOG_PATH)
     pcall(os.rename, LOG_PATH, PREV_LOG_PATH)
-    log(string.format("group started: darktable %s, %d images", tostring(dt.configuration.version), n))
+    log(string.format("%s started: darktable %s, %d images", what, tostring(dt.configuration.version), n))
 end
 
 local function plugin_folder_pref()
@@ -354,6 +367,8 @@ end
 local busy, orphan = false, false
 -- The time the last run's stamp stands for, this session.
 local last_stamp_time = nil
+-- Jobs clicked while another runs: { label, run }, oldest first.
+local queue = {}
 
 local function cleanup_tmp()
     -- cmd.exe may still be reading an orphan's .bat, so leave the files until it exits.
@@ -381,9 +396,40 @@ local function end_job(job)
     if job and job.valid then job.valid = false end
 end
 
+-- Drops every queued job; a cancel means "stop what I started", not "run the rest".
+local function clear_queue()
+    if #queue == 0 then return end
+    dt.print(string.format("Assisted Grouping: %d queued jobs dropped.", #queue))
+    queue = {}
+end
+
 local function stop_job(job)
     M.cancel_requested = true
+    clear_queue()
     end_job(job)
+end
+
+-- While a job runs, remembers `run` to start when it finishes and returns true. Returns
+-- false (do nothing) when nothing is running or there is nothing to queue (`has_input`
+-- false), so the caller's normal checks print their own message.
+local function queue_if_busy(label, has_input, run)
+    if not busy or not has_input then return false end
+    queue[#queue + 1] = { label = label, run = run }
+    dt.print(string.format("Assisted Grouping: %s queued (%d waiting); it starts when the current job finishes.",
+        label, #queue))
+    return true
+end
+
+-- Starts the oldest queued job. Called by every job as it finishes, after busy is cleared.
+local function run_next()
+    if busy or #queue == 0 then return end
+    if not orphan_gone() then
+        clear_queue() -- the stopped helper still holds the tmp files; nothing safe to start
+        return
+    end
+    local nxt = table.remove(queue, 1)
+    log("starting queued job: " .. nxt.label)
+    nxt.run()
 end
 
 local function write_rows(path, rows)
@@ -501,7 +547,8 @@ local function apply_tags(run, records, wanted, job)
             return false
         end
     end
-    log(string.format("tags: %d attached, %d detached", n_added, n_removed))    if failed > 0 then
+    log(string.format("tags: %d attached, %d detached", n_added, n_removed))
+    if failed > 0 then
         notify_error(string.format("Assisted Grouping: couldn't write tags on %d images: %s", failed, first_error))
     end
     return true
@@ -588,7 +635,8 @@ local function count_parent_unsplit(units, parent)
     return n
 end
 
--- opts = { gap, camera, tag, parent, refine, write_tags, native_groups }
+-- opts = { timing, gap, camera, tag, parent, refine, write_tags, native_groups }, as
+-- grouping_core.panel_options returns them.
 function M.group_images(images, opts)
     if busy then
         dt.print("Assisted Grouping: another job is still running. Wait for it to finish, or cancel it first.")
@@ -599,7 +647,7 @@ function M.group_images(images, opts)
         return
     end
     if not opts.write_tags and not opts.native_groups then
-        dt.print("Assisted Grouping: turn on at least one output (group tags or darktable groups)")
+        dt.print("Assisted Grouping: " .. C.ERR_NO_OUTPUT)
         return
     end
     if not images or #images == 0 then
@@ -610,9 +658,9 @@ function M.group_images(images, opts)
     stamp, last_stamp_time = M.run_stamp(os.time(), last_stamp_time)
     busy = true
     M.cancel_requested = false
-    start_log(#images)
-    log(string.format("run stamp %s; gap %s s, camera %s, tag %s, parent %s, refine %s, tags %s, native groups %s",
-        stamp, tostring(opts.gap), tostring(opts.camera), tostring(opts.tag), tostring(opts.parent),
+    start_log("group", #images)
+    log(string.format("run stamp %s; timing %s, gap %s s, camera %s, tag %s, parent %s, refine %s, tags %s, native groups %s",
+        stamp, tostring(opts.timing ~= false), tostring(opts.gap), tostring(opts.camera), tostring(opts.tag), tostring(opts.parent),
         tostring(opts.refine), tostring(opts.write_tags), tostring(opts.native_groups)))
 
     local job, run = nil, { ledger = nil, applying = false }
@@ -637,12 +685,13 @@ function M.group_images(images, opts)
         job.percent = 0.5
 
         local units = C.collapse(records)
-        local layer_opts = { gap = opts.gap, camera = opts.camera, tag = opts.tag, parent = opts.parent }
+        local layer_opts = { gap = opts.gap, timing = opts.timing, camera = opts.camera, tag = opts.tag,
+            parent = opts.parent }
         if opts.refine then layer_opts.base_of = C.base_of_from_tags(units) end
         local result = C.run_layers(units, layer_opts)
         local wanted = C.wanted_tags(units, result, stamp, layer_opts)
-        log(string.format("%d frames in %d groups (%d bursts)", #units, count_groups(result.final_of),
-            count_groups(result.burst_of)))
+        log(string.format("%d frames in %d groups (%d %s)", #units, count_groups(result.final_of),
+            count_groups(result.burst_of), result.timing and "bursts" or "starting groups, timing off"))
         if opts.parent then
             log(string.format("parent layer: %d frames have no child or several under %s, not split",
                 count_parent_unsplit(units, opts.parent), opts.parent))
@@ -659,6 +708,8 @@ function M.group_images(images, opts)
         end
         if opts.native_groups then
             run.applying = true
+            -- Cancel is ignored from here on: half-built native groups are worse than finishing.
+            log("native groups: started; a cancel from now on is ignored so no group is left half-built")
             local counts = M.apply_native_groups(units, result.final_of, run.ledger)
             log(string.format("native groups: %d images grouped, %d skipped (already in a hand-made group)",
                 counts.grouped, counts.skipped))
@@ -676,6 +727,253 @@ function M.group_images(images, opts)
     cleanup_tmp()
     log("run finished")
     flush_log()
+    run_next()
+end
+
+-- Detaches the ledger's tags and takes images out of the ledger's native groups for
+-- the selection, then drops their ledger rows. Hand-made tags and groups stay. A
+-- write that fails keeps its part of the row, so clearing again retries it.
+function M.clear_marks(images)
+    if busy then
+        dt.print("Assisted Grouping: another job is still running. Wait for it to finish, or cancel it first.")
+        return
+    end
+    if not images or #images == 0 then
+        dt.print("Assisted Grouping: select some images first")
+        return
+    end
+    busy = true
+    start_log("clear", #images)
+    local ledger, changed = nil, false
+    local okr, err = pcall(function()
+        ledger = read_ledger()
+        local records, members_of = {}, {}
+        for _, img in ipairs(images) do
+            local id = tonumber(img.id)
+            if ledger[id] then
+                records[#records + 1] = { id = id, img = img, tags = M.tags_of(img) }
+                local list = {}
+                for _, other in ipairs(img:get_group_members()) do list[#list + 1] = { id = tonumber(other.id) } end
+                members_of[id] = list
+            end
+        end
+        if #records == 0 then
+            say("Assisted Grouping: nothing to clear; the selection has no grouping marks.")
+            return
+        end
+
+        local img_of = {}
+        for _, r in ipairs(records) do img_of[r.id] = r.img end
+        local writes, failed, first_error, n_tags, n_ungrouped = 0, 0, nil, 0, 0
+        local function write(fn)
+            local okw, werr = pcall(fn)
+            if not okw then
+                failed = failed + 1
+                first_error = first_error or tostring(werr)
+            end
+            writes = writes + 1
+            if writes >= WRITE_BUDGET then
+                writes = 0
+                dt.control.sleep(WRITE_SLEEP_MS)
+            end
+            return okw
+        end
+
+        changed = true
+        for _, plan in ipairs(C.plan_clear(records, ledger, members_of)) do
+            local entry, img = ledger[plan.id], img_of[plan.id]
+            local left = {}
+            for _, name in ipairs(plan.detach) do
+                local tag = tags.find(name)
+                if tag and write(function() tags.detach(tag, img) end) then
+                    n_tags = n_tags + 1
+                elseif tag then
+                    left[name] = true
+                end
+            end
+            local native = nil
+            if plan.ungroup then
+                -- No leader argument: darktable moves the image into a group of its own.
+                if write(function() img:group_with() end) then
+                    n_ungrouped = n_ungrouped + 1
+                else
+                    native = entry.native
+                end
+            end
+            M.set_ledger_tags(ledger, plan.id, left)
+            M.set_ledger_native(ledger, plan.id, native)
+        end
+        log(string.format("clear: %d images, %d tags detached, %d taken out of native groups, %d failed",
+            #records, n_tags, n_ungrouped, failed))
+        if failed > 0 then
+            notify_error(string.format("Assisted Grouping: couldn't clear %d marks: %s", failed, first_error))
+        end
+        say(string.format("Assisted Grouping: cleared grouping marks from %d images.", #records))
+    end)
+
+    if changed then write_ledger(ledger) end
+    busy = false
+    if not okr then notify_error("Assisted Grouping: clearing marks failed. " .. tostring(err)) end
+    flush_log()
+    run_next()
+end
+
+-- Panel -----------------------------------------------------------------------
+
+-- dt.gui.action_images changes with the selection; queued jobs keep the images they were
+-- clicked with.
+local function copy_images(images)
+    local out = {}
+    for _, img in ipairs(images or {}) do out[#out + 1] = img end
+    return out
+end
+
+-- Culling's partial-burst warning. GTK labels here don't wrap, so the lines are broken by hand.
+local PARTIAL_BURST_WARNING = "Bursts are grouped from the selected\nframes only, so selecting part of a\n"
+    .. "burst splits it. Select whole bursts,\nor the whole shoot."
+
+local function install_panel()
+    if M.module_installed then return end
+    M.module_installed = true
+
+    local timing_check = dt.new_widget("check_button") {
+        label = "Burst timing",
+        tooltip = "Start a new group when the gap to the previous photo is longer than the burst gap (preferences → Lua options, default 2 seconds, decimals allowed).",
+        value = true,
+    }
+    local camera_check = dt.new_widget("check_button") {
+        label = "Camera and lens",
+        tooltip = "Divide each group by camera maker, model and lens.",
+        value = false,
+    }
+    local tag_entry = dt.new_widget("entry") {
+        tooltip = "Divide each group into photos that carry exactly this tag and photos that don't (child tags don't count). Empty = off.",
+        placeholder = "tag, e.g. Cars|Red",
+        text = "",
+    }
+    local parent_entry = dt.new_widget("entry") {
+        tooltip = "Divide each group by which tag directly under this node a photo carries. Photos with none, or several, aren't split by it (the log counts them). Empty = off.",
+        placeholder = "parent tag, e.g. Cars|Number",
+        text = "",
+    }
+    local refine_check = dt.new_widget("check_button") {
+        label = "Refine existing groups",
+        tooltip = "Start from each photo's group tag from the latest earlier run instead of burst timing; photos without one are timed among themselves (or share one group when Burst timing is off). The other layers then divide as usual.",
+        value = false,
+    }
+    local tags_check = dt.new_widget("check_button") {
+        label = "Write group tags",
+        tooltip = "Tag each photo under Assisted Grouping|<run time>|... with its group and each layer's result.",
+        value = true,
+    }
+    local native_check = dt.new_widget("check_button") {
+        label = "Apply darktable groups",
+        tooltip = "Make one darktable group per final group of two or more photos. Photos already in a group you made by hand are skipped. Once this step starts, cancel is ignored so no group is left half-built.",
+        value = false,
+    }
+
+    local function read_options()
+        return C.panel_options({
+            timing = timing_check.value,
+            gap_text = dt.preferences.read("assisted_grouping", "burst_gap_seconds", "string"),
+            camera = camera_check.value,
+            tag = tag_entry.text,
+            parent = parent_entry.text,
+            refine = refine_check.value,
+            write_tags = tags_check.value,
+            native_groups = native_check.value,
+        })
+    end
+
+    local group_button = dt.new_widget("button") {
+        label = "Group selection",
+        tooltip = "Group the selected photos by the layers above. Cancel from the progress bar; a cancelled run changes nothing, except once darktable groups have started.",
+        clicked_callback = function()
+            local opts, why = read_options()
+            if not opts then
+                dt.print("Assisted Grouping: " .. why)
+                return
+            end
+            local images = copy_images(dt.gui.action_images)
+            if queue_if_busy("Group selection", #images > 0, function() M.group_images(images, opts) end) then return end
+            M.group_images(images, opts)
+        end,
+    }
+    local warning_label = dt.new_widget("label") {
+        label = PARTIAL_BURST_WARNING,
+        halign = "start",
+    }
+    local clear_button = dt.new_widget("button") {
+        label = "Clear grouping marks",
+        tooltip = "Remove the group tags and darktable groups this plugin made from the selected photos. Tags and groups you made by hand stay.",
+        clicked_callback = function()
+            local images = copy_images(dt.gui.action_images)
+            if queue_if_busy("Clear grouping marks", #images > 0, function() M.clear_marks(images) end) then return end
+            M.clear_marks(images)
+        end,
+    }
+
+    local panel_box = dt.new_widget("box") {
+        orientation = "vertical",
+        dt.new_widget("section_label") { label = "layers" },
+        timing_check,
+        camera_check,
+        tag_entry,
+        parent_entry,
+        refine_check,
+        dt.new_widget("section_label") { label = "output" },
+        tags_check,
+        native_check,
+        group_button,
+        warning_label,
+        clear_button,
+    }
+
+    dt.register_lib(
+        "assisted_grouping", "Assisted Grouping", true, true,
+        { [dt.gui.views.lighttable] = { "DT_UI_CONTAINER_PANEL_RIGHT_CENTER", 100 } },
+        panel_box
+    )
+end
+
+local function destroy()
+    if dt.gui.libs["assisted_grouping"] then
+        dt.gui.libs["assisted_grouping"].visible = false
+    end
+end
+
+local function restart()
+    if dt.gui.libs["assisted_grouping"] then
+        dt.gui.libs["assisted_grouping"].visible = true
+    end
+end
+
+M.destroy = destroy
+M.restart = restart
+M.destroy_method = "hide"
+M.show = restart
+M.metadata = {
+    name = "Assisted Grouping",
+    purpose = "Group a selection into bursts, optionally divided by camera, tag and parent tag",
+    author = "Custom Script",
+    help = ""
+}
+
+if dt.gui then
+    if dt.gui.current_view().id == "lighttable" then
+        install_panel()
+        restart()
+    else
+        if not M.event_registered then
+            dt.register_event("assisted_grouping", "view-changed", function(event, old_view, new_view)
+                if new_view.name == "lighttable" or new_view.id == "lighttable" then
+                    install_panel()
+                    restart()
+                end
+            end)
+            M.event_registered = true
+        end
+    end
 end
 
 return M
