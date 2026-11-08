@@ -304,6 +304,68 @@ check("plan_replace never removes a user tag", table.concat(remove, " + "):find(
 check("plan_replace removes an old ledger tag no longer wanted", table.concat(remove, " + "), older)
 check("plan_replace does not re-add a present wanted tag", table.concat(add, " + "), "Assisted Grouping|x|Group|0009")
 
+-- plan_native ------------------------------------------------------------------
+local function rec(id, filename) return { id = id, dir = "/shoot", filename = filename, tags = {} } end
+local function alone(records)
+    local out = {}
+    for _, r in ipairs(records) do out[r.id] = { r } end
+    return out
+end
+local function plan_str(plan)
+    local groups = {}
+    for _, g in ipairs(plan.groups) do
+        groups[#groups + 1] = g.leader .. ":" .. table.concat(g.members, ",")
+    end
+    return string.format("detach %s; groups %s; skipped %d",
+        table.concat(plan.detach, ","), table.concat(groups, " "), plan.skipped)
+end
+
+local r1, r2, r3, r4 = rec(1, "a.cr2"), rec(2, "b.cr2"), rec(3, "c.cr2"), rec(4, "d.cr2")
+local units = C.collapse({ r3, r1, r4, r2 })
+local final = { [1] = 1, [2] = 1, [3] = 1, [4] = 2 }
+check("plan_native groups a fresh burst under its lowest id; a single frame stays alone",
+    plan_str(C.plan_native(units, final, {}, alone({ r1, r2, r3, r4 }))),
+    "detach 1,2,3; groups 1:1,2,3; skipped 0")
+
+local hand = alone({ r1, r2, r3, r4 })
+hand[2] = { r2, rec(9, "z.cr2") }
+check("plan_native skips an image in a hand-made group and counts it",
+    plan_str(C.plan_native(units, final, {}, hand)), "detach 1,3; groups 1:1,3; skipped 1")
+
+local ledger = { [2] = { tags = {}, native = 1 }, [9] = { tags = {}, native = 1 } }
+check("plan_native regroups an image whose group the plugin made",
+    plan_str(C.plan_native(units, final, ledger, hand)), "detach 1,2,3; groups 1:1,2,3; skipped 0")
+
+check("plan_native dissolves a ledger group for an image now alone",
+    plan_str(C.plan_native(units, final, { [4] = { tags = {}, native = 3 } }, alone({ r1, r2, r3, r4 }))),
+    "detach 1,2,3,4; groups 1:1,2,3; skipped 0")
+
+local hand_two = alone({ r1, r2 })
+hand_two[2] = { r2, rec(9, "z.cr2") }
+local two = C.collapse({ r1, r2 })
+check("plan_native forms no group when skipping leaves one image",
+    plan_str(C.plan_native(two, { [1] = 1, [2] = 1 }, {}, hand_two)), "detach ; groups ; skipped 1")
+
+check("plan_native leaves a lone image in a hand-made group uncounted",
+    plan_str(C.plan_native(C.collapse({ r2 }), { [2] = 1 }, {}, hand_two)), "detach ; groups ; skipped 0")
+
+local raw, jpg, r7 = rec(5, "e.cr2"), rec(6, "e.jpg"), rec(7, "f.cr2")
+local pair_units = C.collapse({ raw, jpg, r7 })
+local paired = { [5] = { raw, jpg }, [6] = { raw, jpg }, [7] = { r7 } }
+check("plan_native takes a RAW+JPEG pair darktable grouped on import into the burst",
+    plan_str(C.plan_native(pair_units, { [5] = 1, [7] = 1 }, {}, paired)),
+    "detach 5,6,7; groups 5:5,6,7; skipped 0")
+check("plan_native groups a pair that is its own final group",
+    plan_str(C.plan_native(pair_units, { [5] = 1, [7] = 2 }, {}, paired)),
+    "detach 5,6; groups 5:5,6; skipped 0")
+check("plan_native treats an unselected JPEG in the RAW's group as the same frame",
+    plan_str(C.plan_native(C.collapse({ raw, r7 }), { [5] = 1, [7] = 1 }, {}, paired)),
+    "detach 5,7; groups 5:5,7; skipped 0")
+
+local mixed = { [5] = { raw, jpg }, [6] = { jpg, rec(9, "z.cr2") }, [7] = { r7 } }
+check("plan_native skips the whole frame when one of its images is in a hand-made group",
+    plan_str(C.plan_native(pair_units, { [5] = 1, [7] = 1 }, {}, mixed)), "detach ; groups ; skipped 2")
+
 -- summary --------------------------------------------------------------------
 if failures > 0 then
     print(string.format("%d failure(s)", failures))

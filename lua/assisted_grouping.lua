@@ -2,7 +2,8 @@
     assisted_grouping.lua — darktable glue for Assisted Grouping
 
     Reads the selection, gets sub-second capture times from python/exif_times.py,
-    runs the layers in grouping_core.lua and writes the group tags. The functions
+    runs the layers in grouping_core.lua and writes the group tags and native
+    groups. The functions
     above the `require "darktable"` line need no darktable and load in plain `lua`.
 ]]
 
@@ -506,6 +507,70 @@ local function apply_tags(run, records, wanted, job)
     return true
 end
 
+-- Writes one native group per final group of 2+ images, led by its lowest id.
+-- Every image is detached into its own group before any attach: `group_with` on an
+-- image still in an old group would scatter it. Updates the ledger per image, so a
+-- partial failure still leaves it accurate.
+function M.apply_native_groups(units, final_of, ledger)
+    local img_of, members_of = {}, {}
+    for _, unit in ipairs(units) do
+        for _, m in ipairs(unit.members) do
+            img_of[m.id] = m.img
+            local list = {}
+            for _, other in ipairs(m.img:get_group_members()) do
+                list[#list + 1] = { id = tonumber(other.id), dir = other.path, filename = other.filename }
+            end
+            members_of[m.id] = list
+        end
+    end
+
+    local plan = C.plan_native(units, final_of, ledger, members_of)
+    local writes, failed, first_error, grouped = 0, 0, nil, 0
+    local function write(fn)
+        local okw, werr = pcall(fn)
+        if not okw then
+            failed = failed + 1
+            first_error = first_error or tostring(werr)
+        end
+        writes = writes + 1
+        if writes >= WRITE_BUDGET then
+            writes = 0
+            dt.control.sleep(WRITE_SLEEP_MS)
+        end
+        return okw
+    end
+
+    local detached = {}
+    for _, id in ipairs(plan.detach) do
+        -- No leader argument: darktable moves the image into a group of its own.
+        if write(function() img_of[id]:group_with() end) then
+            detached[id] = true
+            M.set_ledger_native(ledger, id, nil)
+        end
+    end
+    for _, group in ipairs(plan.groups) do
+        local leader = group.leader
+        if detached[leader] then
+            local attached = 0
+            for _, id in ipairs(group.members) do
+                if id ~= leader and detached[id]
+                    and write(function() img_of[id]:group_with(img_of[leader]) end) then
+                    M.set_ledger_native(ledger, id, leader)
+                    attached = attached + 1
+                end
+            end
+            if attached > 0 then
+                M.set_ledger_native(ledger, leader, leader)
+                grouped = grouped + attached + 1
+            end
+        end
+    end
+    if failed > 0 then
+        notify_error(string.format("Assisted Grouping: %d native group changes failed: %s", failed, first_error))
+    end
+    return { grouped = grouped, skipped = plan.skipped }
+end
+
 local function count_groups(group_of)
     local seen, n = {}, 0
     for _, g in pairs(group_of) do
@@ -592,13 +657,11 @@ function M.group_images(images, opts)
         if opts.write_tags then
             if not apply_tags(run, records, wanted, job) then return end
         end
-        if opts.native_groups and M.apply_native_groups then
+        if opts.native_groups then
             run.applying = true
             local counts = M.apply_native_groups(units, result.final_of, run.ledger)
             log(string.format("native groups: %d images grouped, %d skipped (already in a hand-made group)",
                 counts.grouped, counts.skipped))
-        elseif opts.native_groups then
-            log("native groups: not available in this build, none applied")
         end
         say(string.format("Assisted Grouping: %d images in %d groups (%s timing). Run %s.",
             #records, count_groups(result.final_of), precision == "subsecond" and "sub-second" or "whole-second", stamp))
