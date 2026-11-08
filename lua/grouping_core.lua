@@ -386,4 +386,68 @@ function M.plan_replace(have, ledger_tags, wanted)
     return add, remove
 end
 
+-- Plans the native groups for `final_of`. `members_of[id]` lists each selected
+-- image's current native group as `{ id, dir, filename }` records, itself included.
+-- A frame is skipped when one of its images sits in a group holding another frame's
+-- image and is not in the ledger as `native`: that group was made by hand. Every
+-- image of a kept frame in a final group of 2+ images is detached, then the group's
+-- lowest id leads. Selected ledger images of smaller groups are detached too, so
+-- the plugin's old groups dissolve on a re-run.
+-- Returns { detach = sorted ids, groups = { { leader, members = sorted ids } }, skipped = n images }.
+function M.plan_native(units, final_of, ledger, members_of)
+    local by_group, order = {}, {}
+    for _, unit in ipairs(units) do
+        local g = final_of[unit.id]
+        if not by_group[g] then
+            by_group[g] = {}
+            order[#order + 1] = g
+        end
+        table.insert(by_group[g], unit)
+    end
+
+    local function hand_made(unit)
+        local own = frame_key(unit.members[1])
+        for _, m in ipairs(unit.members) do
+            if not (ledger[m.id] and ledger[m.id].native) then
+                for _, other in ipairs(members_of[m.id] or {}) do
+                    if frame_key(other) ~= own then return true end
+                end
+            end
+        end
+        return false
+    end
+
+    local plan, detach, skipped_unit = { detach = {}, groups = {}, skipped = 0 }, {}, {}
+    for _, g in ipairs(order) do
+        local n = 0
+        for _, unit in ipairs(by_group[g]) do n = n + #unit.members end
+        if n >= 2 then
+            local kept = {}
+            for _, unit in ipairs(by_group[g]) do
+                if hand_made(unit) then
+                    skipped_unit[unit] = true
+                    plan.skipped = plan.skipped + #unit.members
+                else
+                    for _, m in ipairs(unit.members) do kept[#kept + 1] = m.id end
+                end
+            end
+            if #kept >= 2 then
+                table.sort(kept)
+                plan.groups[#plan.groups + 1] = { leader = kept[1], members = kept }
+                for _, id in ipairs(kept) do detach[id] = true end
+            end
+        end
+    end
+    for _, unit in ipairs(units) do
+        if not skipped_unit[unit] then
+            for _, m in ipairs(unit.members) do
+                if ledger[m.id] and ledger[m.id].native then detach[m.id] = true end
+            end
+        end
+    end
+    for id in pairs(detach) do plan.detach[#plan.detach + 1] = id end
+    table.sort(plan.detach)
+    return plan
+end
+
 return M

@@ -127,6 +127,14 @@ function M.set_ledger_tags(ledger, id, mine)
     if next(mine) or entry.native then ledger[id] = entry else ledger[id] = nil end
 end
 
+-- Sets a ledger entry's native group leader (nil clears it), dropping the entry
+-- when nothing of the plugin's is left.
+function M.set_ledger_native(ledger, id, leader)
+    local entry = ledger[id] or { tags = {} }
+    entry.native = leader
+    if leader or next(entry.tags or {}) then ledger[id] = entry else ledger[id] = nil end
+end
+
 -- The run stamp for `now` (os.time), and the time it stands for. Never at or before
 -- `last_time`, so runs in the same second get different stamps and their groups
 -- never merge.
@@ -492,8 +500,7 @@ local function apply_tags(run, records, wanted, job)
             return false
         end
     end
-    log(string.format("tags: %d attached, %d detached", n_added, n_removed))
-    if failed > 0 then
+    log(string.format("tags: %d attached, %d detached", n_added, n_removed))    if failed > 0 then
         notify_error(string.format("Assisted Grouping: couldn't write tags on %d images: %s", failed, first_error))
     end
     return true
