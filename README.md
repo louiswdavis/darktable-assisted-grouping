@@ -117,7 +117,7 @@ With **Apply darktable groups** on, each final group of two or more images becom
 
 ### RAW+JPEG pairs and duplicates
 
-A RAW and a JPEG with the same folder and filename stem (extension ignored, stem case-sensitive: `DSC0001.ARW` and `DSC0001.JPG` pair, `dsc0001.jpg` doesn't) are one frame, and so are duplicates (versions) of one file. Every member gets the same group and the same tags. This doesn't depend on darktable's own RAW+JPEG grouping at import: the plugin matches folder and stem either way, and a darktable group that holds only one frame's files doesn't count as hand-made.
+A RAW and a JPEG with the same folder and filename stem (extension and case ignored, as darktable pairs them at import: `DSC0001.ARW`, `DSC0001.JPG` and `dsc0001.jpg` are one frame) are one frame, and so are duplicates (versions) of one file. Every member gets the same group and the same tags. This doesn't depend on darktable's own RAW+JPEG grouping at import: the plugin matches folder and stem either way, and a darktable group that holds only one frame's files doesn't count as hand-made.
 
 ### Re-running and clearing
 
@@ -198,7 +198,7 @@ The burst gap lives here, not in the panel.
 - **JPEG:** Pillow reads `SubSecTimeOriginal` (e.g. `897`, i.e. .897 s).
 - **ARW:** Pillow can't read the file, but `exifread` reads both fields from it, so RAW (ARW) files are read directly. This was confirmed on one ZV-E10 ARW; other cameras and other RAW formats are untested.
 
-When a frame's JPEG is in the selection, only the JPEG is read and **the RAW borrows its fraction** (same folder and filename stem, extension ignored, stem case-sensitive). That halves the reads on a RAW+JPEG shoot. If that JPEG has no readable sub-second time, the RAW isn't tried and the run uses whole seconds. Only the fraction comes from the helper; the whole seconds always come from darktable.
+When a frame's JPEG is in the selection, only the JPEG is read and **the RAW borrows its fraction** (same folder and filename stem, extension and case ignored). That halves the reads on a RAW+JPEG shoot. If that JPEG has no readable sub-second time, the RAW isn't tried and the run uses whole seconds. Only the fraction comes from the helper; the whole seconds always come from darktable.
 
 If any timed frame ends up with no fraction (a RAW-only frame neither reader can open, a file without the field, or the helper failing), **the whole run uses whole seconds**, so precision is never mixed. The log says which, and why:
 

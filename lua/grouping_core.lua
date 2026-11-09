@@ -23,16 +23,18 @@ function M.exif_time_to_epoch(s)
 end
 
 -- Directory plus filename without its extension; RAW+JPEG pairs and
--- duplicates (versions of one file) share this key.
+-- duplicates (versions of one file) share this key. The stem is compared
+-- ignoring case, as darktable's import grouping does (`filename LIKE 'stem.%'`
+-- in one film roll; SQLite's LIKE ignores ASCII case).
 local function frame_key(image)
     local stem = (image.filename or ""):match("^(.*)%.[^./\\]*$") or image.filename or ""
-    return (image.dir or "") .. "\0" .. stem
+    return (image.dir or "") .. "\0" .. stem:lower()
 end
 
 -- Sub-second fraction of each timed record from the helper's epoch text (by_id[id]).
 -- A record whose text is blank or absent (a RAW the helper still can't read)
 -- borrows the fraction of a record of the same frame (frame_key: same dir and
--- case-sensitive stem, extension ignored) that has its own. Returns id → fraction,
+-- stem ignoring case, extension ignored) that has its own. Returns id → fraction,
 -- and the id of the first timed record (lowest id) left without one, or nil.
 function M.subsec_fractions(records, by_id)
     local own, timed = {}, {}

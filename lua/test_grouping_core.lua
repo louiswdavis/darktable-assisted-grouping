@@ -507,8 +507,9 @@ sf, smiss = C.subsec_fractions({ srec(2, "/s", "DSC2.JPG") }, { [2] = "178030800
 check("subsec_fractions: JPEG alone keeps its own fraction", near(sf[2], 0.25) and smiss == nil, true)
 sf, smiss = C.subsec_fractions({ srec(1, "/s", "DSC1.ARW"), srec(2, "/s", "dsc1.jpg") },
     { [1] = "", [2] = "1780308000.5" })
-check("subsec_fractions: stem case differs → different frame (frame_key is case-sensitive), no borrow",
-    tostring(sf[1]) .. " / " .. tostring(smiss), "nil / 1")
+check("subsec_fractions: stem case differs → same frame (as darktable's import grouping), borrows",
+    near(sf[1], 0.5) and smiss == nil, true)
+check("collapse: DSC1.ARW + dsc1.jpg are one frame", #C.collapse({ srec(1, "/s", "DSC1.ARW"), srec(2, "/s", "dsc1.jpg") }), 1)
 sf = C.subsec_fractions({ srec(1, "/s", "DSC1.ARW"), srec(2, "/s", "DSC1.jpg") }, { [1] = "", [2] = "1780308000.5" })
 check("subsec_fractions: extension case is ignored, borrows", near(sf[1], 0.5), true)
 sf, smiss = C.subsec_fractions({ srec(1, "/a", "DSC1.ARW"), srec(2, "/b", "DSC1.JPG") },
