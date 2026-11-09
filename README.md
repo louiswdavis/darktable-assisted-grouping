@@ -51,14 +51,13 @@ python3 -m venv .venv
 
 darktable's config directory is `~/.config/darktable` on Linux/macOS and `%LOCALAPPDATA%\darktable` on Windows. Link the plugin into it and load it from `luarc`.
 
-The plugin is two Lua files: `assisted_grouping.lua` loads `grouping_core.lua` from the folder it sits in, so **link both**.
+The plugin is one Lua file, `lua/assisted_grouping.lua`. An older install also linked `grouping_core.lua`; that file is gone, so delete its link from `lua/contrib`.
 
 Linux / macOS:
 
 ```
 mkdir -p ~/.config/darktable/lua/contrib
 ln -s "$(pwd)/lua/assisted_grouping.lua" ~/.config/darktable/lua/contrib/assisted_grouping.lua
-ln -s "$(pwd)/lua/grouping_core.lua" ~/.config/darktable/lua/contrib/grouping_core.lua
 echo 'require "contrib/assisted_grouping"' >> ~/.config/darktable/luarc
 ```
 
@@ -67,7 +66,6 @@ Windows (Command Prompt). Creating symbolic links needs an Administrator prompt 
 ```
 if not exist "%LOCALAPPDATA%\darktable\lua\contrib" mkdir "%LOCALAPPDATA%\darktable\lua\contrib"
 mklink "%LOCALAPPDATA%\darktable\lua\contrib\assisted_grouping.lua" "%CD%\lua\assisted_grouping.lua"
-mklink "%LOCALAPPDATA%\darktable\lua\contrib\grouping_core.lua" "%CD%\lua\grouping_core.lua"
 echo require "contrib/assisted_grouping" >> "%LOCALAPPDATA%\darktable\luarc"
 ```
 
@@ -76,11 +74,10 @@ Windows (PowerShell). Same Administrator caveat.
 ```
 New-Item -ItemType Directory -Force "$env:LOCALAPPDATA\darktable\lua\contrib"
 New-Item -ItemType SymbolicLink -Path "$env:LOCALAPPDATA\darktable\lua\contrib\assisted_grouping.lua" -Value "$PWD\lua\assisted_grouping.lua"
-New-Item -ItemType SymbolicLink -Path "$env:LOCALAPPDATA\darktable\lua\contrib\grouping_core.lua" -Value "$PWD\lua\grouping_core.lua"
 Add-Content "$env:LOCALAPPDATA\darktable\luarc" 'require "contrib/assisted_grouping"'
 ```
 
-Windows without Administrator rights or Developer Mode: copy both Lua files into `%LOCALAPPDATA%\darktable\lua\contrib` instead of linking them, and add the same `luarc` line. Re-copy both after every update. The **plugin folder** preference (next step) still points the plugin at this repo for the Python side.
+Windows without Administrator rights or Developer Mode: copy `assisted_grouping.lua` into `%LOCALAPPDATA%\darktable\lua\contrib` instead of linking it, and add the same `luarc` line. Re-copy it after every update. The **plugin folder** preference (next step) still points the plugin at this repo for the Python side.
 
 ### 3. Point the plugin at the repo
 
@@ -213,7 +210,7 @@ Capture times use a constant offset with no daylight saving (`isdst = false`), s
 
 ## Troubleshooting
 
-- **The panel isn't there.** Start darktable with `-d lua` and look for `LUA ERROR` in the log. On Windows the log is `Documents\Darktable\darktable-log.txt`. A `module 'grouping_core' not found` error means only `assisted_grouping.lua` was linked: link `grouping_core.lua` next to it.
+- **The panel isn't there.** Start darktable with `-d lua` and look for `LUA ERROR` in the log. On Windows the log is `Documents\Darktable\darktable-log.txt`. A `module 'grouping_core' not found` error means darktable is loading an old copy of `assisted_grouping.lua`: re-link or re-copy it from this repo.
 - **Every run writes a log** to `assisted_grouping.log` in darktable's config directory (`%LOCALAPPDATA%\darktable\assisted_grouping.log` on Windows); the run before it is kept as `assisted_grouping.prev.log`. It has the run stamp and every setting, the timing line, the frame and group counts, how many photos the parent layer left unsplit, the tags attached and detached, the darktable groups made and skipped, every message shown on screen, and the helper's errors. Start here when a result looks wrong.
 - **"the plugin folder preference (…) has no python/exif_times.py."** Point the preference at the `darktable-assisted-grouping` folder, or clear it to auto-detect.
 - **The run always says whole-second.** Read the reason on the `timing:` line. If it names a RAW image, the helper couldn't read that RAW (check that `exifread` is installed in the interpreter, or select the JPEGs too). "exif_times.py stopped with exit code …" usually means the interpreter has no Pillow: install `python/requirements.txt` into it.
@@ -291,16 +288,16 @@ For each step that doesn't match, send back:
 
 Run these from the repo root (the `darktable-assisted-grouping` folder).
 
-The grouping logic (`lua/grouping_core.lua`) runs under any Lua 5.4, no darktable needed:
+The grouping logic (the top of `lua/assisted_grouping.lua`, above its `require "darktable"`) runs under any Lua 5.4, no darktable needed:
 
 ```
-lua lua/test_grouping_core.lua
+lua lua/test_assisted_grouping.lua
 ```
 
 No `lua` binary handy? `pip install lupa` in the venv, then:
 
 ```
-.venv/bin/python -c "import lupa; L=lupa.LuaRuntime(); L.execute('package.path=\"./lua/?.lua;\"..package.path; dofile(\"lua/test_grouping_core.lua\")')"
+.venv/bin/python -c "import lupa; L=lupa.LuaRuntime(); L.execute('package.path=\"./lua/?.lua;\"..package.path; dofile(\"lua/test_assisted_grouping.lua\")')"
 ```
 
 The Python tests run every `python/test_*.py` and write each one's output to `tests/<name>.txt`:
