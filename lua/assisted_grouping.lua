@@ -1807,6 +1807,8 @@ end
 --       show = fn(settings), remember = fn(name), initial = name, log = fn(msg),
 --       on_change = fn(name, is_template) | nil, can_switch = fn() -> ok, why | nil,
 --       allow_store_new = bool }
+-- Optional store.copy_note(from, to) -> confirm text | nil, why and store.copy(from, to) -> ok, err:
+-- store new then asks first, and copies the selected preset's store (e.g. a folder) before writing.
 -- Returns ctl: ctl.widget (the box to put first in the panel), ctl.widgets, ctl.select(name),
 -- ctl.refresh(), ctl.check_dirty(), ctl.name(), ctl.saved (settings last loaded or saved).
 local function make_preset_controls(o)
@@ -1814,6 +1816,7 @@ local function make_preset_controls(o)
     local names, current, menu_actions = { "template" }, nil, {}
     local name_mode
     local picker, menu, name_entry, name_box, confirm_label, confirm_box, dirty_label
+    local confirm_button, confirm_action, delete_clicked
 
     local function say(msg) dt.print(o.prefix .. ": " .. msg) end
 
@@ -1886,10 +1889,16 @@ local function make_preset_controls(o)
         ctl.check_dirty()
     end
 
-    local function ask_delete()
-        confirm_label.label = string.format('Delete preset "%s"?', current)
+    local function ask_confirm(text, button, action)
+        confirm_label.label = text
+        confirm_button.label = button
+        confirm_action = action
         name_box.visible = false
         confirm_box.visible = true
+    end
+
+    local function ask_delete()
+        ask_confirm(string.format('Delete preset "%s"?', current), "Delete", delete_clicked)
     end
 
     local function set_menu()
@@ -1968,13 +1977,27 @@ local function make_preset_controls(o)
         if name_mode == "store" then
             local settings, bad = o.read_panel()
             if not settings then say(bad); return end
-            if not o.store.write(name, M.preset_encode(o.schema, settings)) then
-                say("couldn't write " .. o.store.path(name))
+            local from = current
+            local function store_new()
+                if o.store.copy then
+                    local ok, err = o.store.copy(from, name)
+                    if not ok then say(string.format('couldn\'t copy "%s": %s', from, tostring(err))); return end
+                end
+                if not o.store.write(name, M.preset_encode(o.schema, settings)) then
+                    say("couldn't write " .. o.store.path(name))
+                    return
+                end
+                hide_boxes()
+                ctl.refresh()
+                ctl.select(name)
+            end
+            if o.store.copy_note then
+                local text, why = o.store.copy_note(from, name)
+                if not text then say(why); return end
+                ask_confirm(text, "Store", store_new)
                 return
             end
-            name_box.visible = false
-            ctl.refresh()
-            ctl.select(name)
+            store_new()
         else
             local ok, err = o.store.rename(current, name)
             if not ok then say(string.format('couldn\'t rename "%s": %s', current, tostring(err))); return end
@@ -1986,7 +2009,7 @@ local function make_preset_controls(o)
         end
     end
 
-    local function delete_clicked()
+    delete_clicked = function()
         local ok, err = o.store.remove(current)
         if not ok then say(string.format('couldn\'t delete "%s": %s', current, tostring(err))); return end
         confirm_box.visible = false
@@ -2027,13 +2050,17 @@ local function make_preset_controls(o)
         },
     }
     confirm_label = dt.new_widget("label") { label = "", halign = "start" }
+    confirm_button = dt.new_widget("button") {
+        label = "Delete",
+        clicked_callback = function() if confirm_action then confirm_action() end end,
+    }
     confirm_box = dt.new_widget("box") {
         orientation = "vertical",
         visible = false,
         confirm_label,
         dt.new_widget("box") {
             orientation = "horizontal",
-            dt.new_widget("button") { label = "Delete", clicked_callback = delete_clicked },
+            confirm_button,
             dt.new_widget("button") { label = "Cancel", clicked_callback = function() confirm_box.visible = false end },
         },
     }

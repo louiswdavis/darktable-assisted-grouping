@@ -18,6 +18,7 @@ It is the third plugin next to `darktable-assisted-tagging` and `darktable-assis
 - [Install](#install)
 - [Using it](#using-it)
 - [Panel options](#panel-options)
+- [Presets](#presets)
 - [Preferences](#preferences)
 - [How it works](#how-it-works)
 - [Troubleshooting](#troubleshooting)
@@ -138,13 +139,26 @@ If a job is already running, a second click queues the new job; it starts when t
 
 A cancel doesn't wait for the helper. If it is still reading files, it finishes in the background and leaves its temp files in darktable's tmp folder; the next run starts straight away with new ones.
 
+## Presets
+
+The **preset** picker at the top of the panel saves every panel setting (the layers, the burst gap and the outputs) under a name, so a shoot type is one click away.
+
+- **preset**: `template` first, then your presets by name. Picking one loads its values into the panel. The panel opens on the last one you picked.
+- **template**: the built-in defaults. It can't be updated, renamed or deleted; use it as the starting point for a new preset.
+- **☰** beside it: **update preset "<name>"** saves the panel into the selected preset; **store new preset…** asks for a name (type it, then **OK**) and saves the panel as a new preset; **rename preset…**; **delete preset** asks first. On `template` only **store new preset…** is offered.
+- **unsaved changes** shows under the picker when the panel differs from the saved preset. Switching presets drops them. Text fields have no change signal, so their edits show when **☰** is opened or a run starts.
+- Each preset is `assisted_grouping/presets/<name>.json` in darktable's config folder. A name can't be `template` or use characters a Windows file name can't hold.
+- A setting missing from a file uses its default; **update preset** writes every setting, so older files fill in. A value that's no longer valid uses the default and logs one line naming the preset and setting.
+- A file that can't be read or parsed: the panel says so, names the file, and keeps its current values. The plugin never rewrites a broken file; fix or delete it.
+
 ## Panel options
 
-The panel has two sections. Layers run in a fixed order, and each one only divides the groups the one before produced; none merges.
+Below the [preset](#presets) picker the panel has two sections. Layers run in a fixed order, and each one only divides the groups the one before produced; none merges.
 
 ### layers
 
-- **Burst timing** (on by default). Sorts the frames by capture time and starts a new group when the gap to the previous frame is longer than the burst gap (a preference, see [Preferences](#preferences)). A frame with no capture time is a group of its own, never merged and never dropped. Off: every frame starts in one shared group, and only the layers below divide it.
+- **Burst timing** (on by default). Sorts the frames by capture time and starts a new group when the gap to the previous frame is longer than the burst gap. A frame with no capture time is a group of its own, never merged and never dropped. Off: every frame starts in one shared group, and only the layers below divide it.
+- **burst gap (seconds)** (text field, default `2`). Frames closer together than this are one burst. Decimals allowed, with a point or a comma (`0.5`, `1,5`). Must be above 0, or the run refuses.
 - **Camera and lens.** Divides each group by camera maker, model and lens, so two bodies or two lenses shooting the same moment end up apart.
 - **Tag** (text field, e.g. `Cars|Red`). Divides each group into photos that carry exactly this tag and photos that don't. Child tags don't count. Empty = off.
 - **Parent tag** (text field, e.g. `Cars|Number`). Divides each group by which tag directly under this node a photo carries. A photo with no child under the node, or several, isn't split off by this layer: it stays with the group's first part. The log counts these photos.
@@ -166,19 +180,16 @@ At least one output must be on, or the run refuses: "turn on at least one output
 - **Group selection.** Runs the layers on the selected photos.
 - **Clear grouping marks.** Removes the plugin's tags and darktable groups from the selected photos (see [Re-running and clearing](#re-running-and-clearing)).
 
-The checkbox and text field states are not saved between darktable sessions.
+Everything in **layers** and **output** is saved with the [preset](#presets).
 
 ## Preferences
 
-In **preferences → lua options**:
+In **preferences → lua options**. Everything else is a panel setting saved with its [preset](#presets).
 
 | Preference | Default | What it does |
 |---|---|---|
 | Assisted Grouping: Python interpreter | empty | Python with Pillow and exifread. Empty = the repo's `.venv`, else `python`/`python3` on `PATH` |
 | Assisted Grouping: plugin folder | empty | This repo's folder (holds `python/` and `.venv`). Empty = auto-detect |
-| Assisted Grouping: burst gap (seconds) | `2` | Frames closer together than this are one burst. Decimals allowed, with a point or a comma (`0.5`, `1,5`). Must be above 0, or the run refuses |
-
-The burst gap lives here, not in the panel.
 
 ## How it works
 
@@ -246,7 +257,7 @@ The darktable side has never run: it was written without darktable to test again
 
 1. **Install Python.** In the repo folder: `python -m venv .venv`, then `.venv\Scripts\pip install -r python\requirements.txt`. *Expect:* Pillow and exifread install with no errors.
 2. **Install the plugin** as in [Install](#2-darktable-side), linking **both** Lua files, and start darktable. *Expect:* an **Assisted Grouping** panel on the right in lighttable, with sections *layers* and *output* and the partial-burst warning. No `LUA ERROR` in the darktable log.
-3. **Set the plugin folder** in **preferences → lua options → Assisted Grouping: plugin folder** to the repo folder. *Expect:* the preference is saved; the burst gap preference shows `2`.
+3. **Set the plugin folder** in **preferences → lua options → Assisted Grouping: plugin folder** to the repo folder. *Expect:* the preference is saved; the panel's burst gap shows `2` on `template`.
 
 **First run (tags only)**
 
