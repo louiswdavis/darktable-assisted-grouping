@@ -881,14 +881,14 @@ local function install_panel()
         tooltip = "Start from each photo's group tag from the latest earlier run instead of burst timing; photos without one are timed among themselves (or share one group when Burst timing is off). The other layers then divide as usual.",
         value = false,
     }
-    local tags_check = dt.new_widget("check_button") {
-        label = "Write group tags",
-        tooltip = "Tag each photo under Assisted Grouping|<run time>|... with its group and each layer's result.",
-        value = true,
-    }
     local native_check = dt.new_widget("check_button") {
         label = "Apply darktable groups",
-        tooltip = "Make one darktable group per final group of two or more photos. Photos already in a group you made by hand are skipped. Once this step starts, cancel is ignored so no group is left half-built.",
+        tooltip = "Default, quick output. Make one darktable group per final group of two or more photos. Photos already in a group you made by hand are skipped. Once this step starts, cancel is ignored so no group is left half-built.",
+        value = true,
+    }
+    local tags_check = dt.new_widget("check_button") {
+        label = "Write group tags",
+        tooltip = "Tag each photo under Assisted Grouping|<run time>|... with its group and each layer's result. Adds time on a large selection.",
         value = false,
     }
 
@@ -942,8 +942,8 @@ local function install_panel()
         parent_entry,
         refine_check,
         dt.new_widget("section_label") { label = "output" },
-        tags_check,
         native_check,
+        tags_check,
         group_button,
         warning_label,
         clear_button,
