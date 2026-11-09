@@ -31,8 +31,9 @@ M.tags_of = nil
 
 -- One record per darktable image. `dir` + `filename` is what grouping_core.collapse
 -- pairs RAW+JPEG by; `file` is the full path the helper reads; `img` is the
--- darktable image the tags are written to.
-function M.build_images(images)
+-- darktable image the tags are written to. `with_tags` false leaves `tags` empty
+-- (one darktable query per image saved) for runs that read and write no tags.
+function M.build_images(images, with_tags)
     local out = {}
     for _, img in ipairs(images) do
         local taken = blank_to_nil(img.exif_datetime_taken)
@@ -46,18 +47,63 @@ function M.build_images(images)
             maker = blank_to_nil(img.exif_maker),
             model = blank_to_nil(img.exif_model),
             lens = blank_to_nil(img.exif_lens),
-            tags = M.tags_of(img),
+            tags = with_tags == false and {} or M.tags_of(img),
         }
     end
     return out
 end
 
--- `id,path` rows for exif_times.py. Frames darktable has no capture time for are
--- left out: they are their own group whatever the helper reads.
-function M.manifest_rows(records)
+-- Tags feed the tag, parent and Refine layers and the tag writer; nothing else.
+function M.needs_tags(opts)
+    return (opts.tag or opts.parent or opts.refine or opts.write_tags) and true or false
+end
+
+-- Units whose capture time the burst layer uses: timing on, a capture time, and
+-- no group from Refine's base_of. Frames darktable has no capture time for are
+-- their own group whatever the helper reads.
+function M.units_to_time(units, timing, base_of)
+    local out = {}
+    if timing == false then return out end
+    for _, unit in ipairs(units) do
+        if unit.epoch and not (base_of and base_of[unit.id]) then out[#out + 1] = unit end
+    end
+    return out
+end
+
+-- How many units carry `tag` (the tag layer's "has" side).
+function M.count_tagged(units, tag)
+    local n = 0
+    for _, unit in ipairs(units) do
+        if unit.tags and unit.tags[tag] then n = n + 1 end
+    end
+    return n
+end
+
+-- Every member of `units`, the records apply_subsec works on.
+function M.members_of(units)
+    local out = {}
+    for _, unit in ipairs(units) do
+        for _, m in ipairs(unit.members or { unit }) do out[#out + 1] = m end
+    end
+    return out
+end
+
+local function is_jpeg(r)
+    local ext = ((r.filename or ""):match("%.([^./\\]+)$") or ""):lower()
+    return ext == "jpg" or ext == "jpeg"
+end
+
+-- `id,path` rows for exif_times.py, one per unit: its JPEG when it has a dated one
+-- (a fast Pillow read), else its lowest-id dated member. The unit's other members
+-- borrow that fraction (grouping_core.subsec_fractions), so a RAW+JPEG pair costs one read.
+function M.manifest_rows(units)
     local rows = {}
-    for _, r in ipairs(records) do
-        if r.epoch then rows[#rows + 1] = { r.id, r.file } end
+    for _, unit in ipairs(units) do
+        local pick
+        for _, m in ipairs(unit.members or { unit }) do
+            if m.epoch and (pick == nil or (is_jpeg(m) and not is_jpeg(pick))) then pick = m end
+        end
+        if pick then rows[#rows + 1] = { pick.id, pick.file } end
     end
     table.sort(rows, function(a, b) return a[1] < b[1] end)
     return rows
@@ -82,11 +128,15 @@ end
 -- when every timed frame has a fraction (its own, or borrowed from the JPEG of its
 -- RAW+JPEG pair, see grouping_core.subsec_fractions) and the helper says
 -- `subsecond`. Only the fraction is taken: the helper's whole part (timegm) and
--- the core's (os.time) can differ by the local offset. Returns "subsecond" or
--- "whole" and, for "whole", why.
+-- the core's (os.time) can differ by the local offset. `records` are the members
+-- of the timed units (members_of). Returns "subsecond" or "whole" and, for
+-- "whole", why.
 function M.apply_subsec(records, text)
-    local rows = M.manifest_rows(records)
-    if #rows == 0 then return "whole", "no frame has a capture time" end
+    local any_timed = false
+    for _, r in ipairs(records) do
+        if r.epoch then any_timed = true; break end
+    end
+    if not any_timed then return "whole", "no frame has a capture time" end
     local by_id, precision = M.parse_helper_results(text)
     if precision ~= "subsecond" then
         return "whole", "the helper reported whole-second precision"
@@ -140,6 +190,42 @@ function M.run_stamp(now, last_time)
     return os.date("%Y-%m-%d %H:%M:%S", t), t
 end
 
+-- Writes `text` to `path`.tmp, then moves it onto `path`, so a failed or cut-short
+-- write leaves the old file. os.rename won't replace a file on Windows, so on a
+-- failed rename the old file is removed and the rename retried; a crash in that gap
+-- leaves only `path`.tmp, which read_file_or_tmp falls back to. Returns true, or nil and why.
+function M.write_file_atomic(path, text)
+    local tmp = path .. ".tmp"
+    local f, oerr = io.open(tmp, "w")
+    if not f then return nil, oerr end
+    local okw, werr = f:write(text)
+    local okc, cerr = f:close()
+    if not okw or not okc then
+        pcall(os.remove, tmp)
+        return nil, werr or cerr
+    end
+    local okr, rerr = os.rename(tmp, path)
+    if not okr then
+        os.remove(path)
+        okr, rerr = os.rename(tmp, path)
+    end
+    if not okr then return nil, rerr end
+    return true
+end
+
+-- `path`'s text, or `path`.tmp's when `path` is missing (see write_file_atomic).
+function M.read_file_or_tmp(path)
+    for _, p in ipairs({ path, path .. ".tmp" }) do
+        local f = io.open(p, "r")
+        if f then
+            local t = f:read("a")
+            f:close()
+            return t
+        end
+    end
+    return nil
+end
+
 -- UTF-8 → UTF-16LE (no BOM), for the .vbs launcher: wscript reads a script as
 -- ANSI unless it's UTF-16, which garbles a non-ASCII tmp path.
 function M.utf16le(s)
@@ -175,11 +261,6 @@ local HELPER_TIMEOUT_SECONDS = 600
 
 local IS_WINDOWS = dt.configuration.running_os == "windows"
 local TMP_DIR = dt.configuration.tmp_dir
-local MANIFEST_PATH = TMP_DIR .. "/dt_assisted_grouping_manifest.csv"
-local RESULTS_PATH = TMP_DIR .. "/dt_assisted_grouping_results.csv"
-local DONE_PATH = TMP_DIR .. "/dt_assisted_grouping_done.txt"
-local BAT_PATH = TMP_DIR .. "/dt_assisted_grouping_run.bat"
-local VBS_PATH = TMP_DIR .. "/dt_assisted_grouping_run.vbs"
 local LOG_PATH = dt.configuration.config_dir .. "/assisted_grouping.log"
 local PREV_LOG_PATH = dt.configuration.config_dir .. "/assisted_grouping.prev.log"
 local LEDGER_DIR = dt.configuration.config_dir .. "/assisted_grouping"
@@ -242,14 +323,13 @@ local function make_dir(dir)
     end
 end
 
--- Log lines wait here while exif_times.py may append its stderr to the same file.
+-- Log lines wait here and reach the file at flush_log.
 local log_buffer = {}
 
 local function log(msg)
     log_buffer[#log_buffer + 1] = os.date("%H:%M:%S ") .. "lua: " .. msg
 end
 
--- Only call while no exif_times.py process is running.
 local function flush_log()
     if #log_buffer == 0 then return end
     local f = io.open(LOG_PATH, "a")
@@ -339,21 +419,25 @@ end
 local function run_async_command(cmd, done_path)
     local done_tmp = done_path .. ".tmp"
     if IS_WINDOWS then
-        local f = io.open(BAT_PATH, "w")
+        local bat_path, vbs_path = done_path .. ".bat", done_path .. ".vbs"
+        local f = io.open(bat_path, "w")
         if not f then return false end
-        local win_done, win_tmp = done_path:gsub("/", "\\"), done_tmp:gsub("/", "\\")
+        -- cmd.exe expands %…% in a .bat, so a literal % in a path is doubled.
+        local function bat_text(s) return (s:gsub("%%", "%%%%")) end
+        local win_done = bat_text((done_path:gsub("/", "\\")))
+        local win_tmp = bat_text((done_tmp:gsub("/", "\\")))
         f:write("@echo off\r\nchcp 65001>nul\r\n")
-        f:write(cmd, " < NUL\r\n")
+        f:write(bat_text(cmd), " < NUL\r\n")
         -- redirect first: "echo 0> f" would redirect handle 0 and leave f empty
         f:write('> "', win_tmp, '" echo %ERRORLEVEL%\r\n')
         f:write('move /y "', win_tmp, '" "', win_done, '" >nul\r\n')
         f:close()
-        local f_vbs = io.open(VBS_PATH, "wb")
+        local f_vbs = io.open(vbs_path, "wb")
         if not f_vbs then return false end
         f_vbs:write("\xFF\xFE", M.utf16le('Set WshShell = CreateObject("WScript.Shell")\r\n'
-            .. 'WScript.Quit WshShell.Run(Chr(34) & "' .. BAT_PATH:gsub("/", "\\") .. '" & Chr(34), 0, False)\r\n'))
+            .. 'WScript.Quit WshShell.Run(Chr(34) & "' .. bat_path:gsub("/", "\\") .. '" & Chr(34), 0, False)\r\n'))
         f_vbs:close()
-        os.execute('wscript.exe "' .. VBS_PATH:gsub("/", "\\") .. '"')
+        os.execute('wscript.exe "' .. vbs_path:gsub("/", "\\") .. '"')
     else
         os.execute('( ' .. cmd .. ' ; echo $? > ' .. shell_quote(done_tmp)
             .. ' ; mv -f ' .. shell_quote(done_tmp) .. ' ' .. shell_quote(done_path) .. ' ) >/dev/null 2>&1 &')
@@ -361,29 +445,36 @@ local function run_async_command(cmd, done_path)
     return true
 end
 
--- One run at a time: runs share the tmp files and the .bat/.vbs launcher. `orphan` is
--- a helper that hadn't exited when its run was cancelled; nothing starts until its
--- done file appears.
-local busy, orphan = false, false
+-- One run at a time.
+local busy = false
 -- The time the last run's stamp stands for, this session.
 local last_stamp_time = nil
 -- Jobs clicked while another runs: { label, run }, oldest first.
 local queue = {}
 
-local function cleanup_tmp()
-    -- cmd.exe may still be reading an orphan's .bat, so leave the files until it exits.
-    if orphan then return end
-    for _, p in ipairs({ MANIFEST_PATH, RESULTS_PATH, DONE_PATH, DONE_PATH .. ".tmp", BAT_PATH, VBS_PATH }) do
-        pcall(os.remove, p)
+-- A helper call's temp files. Each call gets its own names, so a helper still
+-- running after its run was cancelled or timed out can't touch the next run's files.
+local run_seq = 0
+local function new_run_paths()
+    run_seq = run_seq + 1
+    local base = string.format("%s/dt_assisted_grouping_%d_%d_", TMP_DIR, os.time(), run_seq)
+    return { manifest = base .. "manifest.csv", results = base .. "results.csv",
+        stderr = base .. "stderr.txt", done = base .. "done.txt" }
+end
+
+-- Only once the helper has exited: cmd.exe reads a .bat as it runs.
+local function remove_run_files(p)
+    for _, f in ipairs({ p.manifest, p.results, p.stderr, p.done, p.done .. ".tmp",
+            p.done .. ".bat", p.done .. ".vbs" }) do
+        pcall(os.remove, f)
     end
 end
 
-local function orphan_gone()
-    if orphan and file_exists(DONE_PATH) then
-        orphan = false
-        cleanup_tmp()
-    end
-    return not orphan
+-- Copies the helper's stderr into the log. The helper writes it to its own temp
+-- file, so a straggler never holds the log open (Windows then can't rotate it).
+local function log_helper_stderr(p)
+    local text = read_file(p.stderr)
+    for line in (text or ""):gmatch("[^\r\n]+") do log_buffer[#log_buffer + 1] = line end
 end
 
 local function cancelled(job)
@@ -423,10 +514,6 @@ end
 -- Starts the oldest queued job. Called by every job as it finishes, after busy is cleared.
 local function run_next()
     if busy or #queue == 0 then return end
-    if not orphan_gone() then
-        clear_queue() -- the stopped helper still holds the tmp files; nothing safe to start
-        return
-    end
     local nxt = table.remove(queue, 1)
     log("starting queued job: " .. nxt.label)
     nxt.run()
@@ -440,48 +527,47 @@ local function write_rows(path, rows)
     return true
 end
 
--- Runs exif_times.py and blocks until it exits. Returns the results text, or nil
--- plus "cancelled" or a reason the run falls back to whole seconds.
-local function read_helper_times(records, job)
-    local rows = M.manifest_rows(records)
+-- Runs exif_times.py on one file per unit and blocks until it exits. Returns the
+-- results text, or nil plus "cancelled" or a reason the run falls back to whole
+-- seconds. A helper still running at a cancel or the timeout keeps its temp files;
+-- the next run uses new names, so it needn't wait.
+local function read_helper_times(units, job)
+    local rows = M.manifest_rows(units)
     if #rows == 0 then return nil, "no frame has a capture time" end
-    pcall(os.remove, RESULTS_PATH)
-    pcall(os.remove, DONE_PATH)
-    if not write_rows(MANIFEST_PATH, rows) then
+    local p = new_run_paths()
+    if not write_rows(p.manifest, rows) then
         return nil, "couldn't write the image list to darktable's tmp folder"
     end
     local script = helper_script()
     local cmd = shell_quote(python_bin(script)) .. " -u " .. shell_quote(script) .. " "
-        .. shell_quote(MANIFEST_PATH) .. " " .. shell_quote(RESULTS_PATH)
-        .. " 2>> " .. shell_quote(LOG_PATH)
-    log("running: " .. cmd)
+        .. shell_quote(p.manifest) .. " " .. shell_quote(p.results)
+        .. " 2> " .. shell_quote(p.stderr)
+    log(string.format("running (%d files): %s", #rows, cmd))
     flush_log()
-    if not run_async_command(cmd, DONE_PATH) then
+    if not run_async_command(cmd, p.done) then
         return nil, "couldn't start exif_times.py (no write access to darktable's tmp folder)"
     end
     local start = os.time()
     while true do
-        if cancelled(job) then
-            for _ = 1, 50 do
-                if file_exists(DONE_PATH) then return nil, "cancelled" end
-                dt.control.sleep(100)
-            end
-            orphan = true
-            log("exif_times.py hasn't exited yet; the next run waits for it")
-            return nil, "cancelled"
-        end
-        if file_exists(DONE_PATH) then
-            local code = tonumber((read_file(DONE_PATH) or ""):match("%d+"))
+        if file_exists(p.done) then
+            local code = tonumber((read_file(p.done) or ""):match("%d+"))
+            log_helper_stderr(p)
             log("exif_times.py exit " .. tostring(code))
+            local text = read_file(p.results)
+            remove_run_files(p)
+            if cancelled(job) then return nil, "cancelled" end
             if code ~= 0 then
                 return nil, string.format("exif_times.py stopped with exit code %s (see assisted_grouping.log)", tostring(code or "?"))
             end
-            local text = read_file(RESULTS_PATH)
             if not text then return nil, "exif_times.py wrote no results" end
             return text
         end
+        if cancelled(job) then
+            log("exif_times.py is still running; its temp files stay in darktable's tmp folder (" .. p.done .. ")")
+            return nil, "cancelled"
+        end
         if os.time() - start > HELPER_TIMEOUT_SECONDS then
-            orphan = true
+            log("exif_times.py is still running; its temp files stay in darktable's tmp folder (" .. p.done .. ")")
             return nil, string.format("exif_times.py didn't finish within %d minutes", HELPER_TIMEOUT_SECONDS // 60)
         end
         dt.control.sleep(150)
@@ -489,18 +575,16 @@ local function read_helper_times(records, job)
 end
 
 local function read_ledger()
-    return C.ledger_parse(read_file(LEDGER_PATH))
+    return C.ledger_parse(M.read_file_or_tmp(LEDGER_PATH))
 end
 
 -- Writes the ledger of the tags and native groups this plugin made.
 local function write_ledger(ledger)
     make_dir(LEDGER_DIR)
-    local lf = io.open(LEDGER_PATH, "w")
-    if lf then
-        lf:write(C.ledger_format(ledger))
-        lf:close()
-    else
-        log("couldn't write the ledger " .. LEDGER_PATH .. "; tags this run attached will count as yours next run")
+    local ok_w, err = M.write_file_atomic(LEDGER_PATH, C.ledger_format(ledger))
+    if not ok_w then
+        notify_error(string.format("Assisted Grouping: couldn't save the ledger %s (%s). Tags and groups this run made will count as yours next run.",
+            LEDGER_PATH, tostring(err)))
     end
 end
 
@@ -642,10 +726,6 @@ function M.group_images(images, opts)
         dt.print("Assisted Grouping: another job is still running. Wait for it to finish, or cancel it first.")
         return
     end
-    if not orphan_gone() then
-        dt.print("Assisted Grouping: the last run is still stopping. Try again in a moment.")
-        return
-    end
     if not opts.write_tags and not opts.native_groups then
         dt.print("Assisted Grouping: " .. C.ERR_NO_OUTPUT)
         return
@@ -667,27 +747,37 @@ function M.group_images(images, opts)
     local okr, err = pcall(function()
         job = dt.gui.create_job("Assisted Grouping", true, stop_job)
         job.percent = 0.0
-        local records = M.build_images(images)
-
-        local text, why = read_helper_times(records, job)
-        flush_log()
-        if why == "cancelled" then
-            say("Assisted Grouping: cancelled, nothing was changed.")
-            return
-        end
-        local precision, reason = "whole", why
-        if text then precision, reason = M.apply_subsec(records, text) end
-        if precision == "subsecond" then
-            log("timing: sub-second")
-        else
-            log("timing: whole seconds for the whole run (" .. tostring(reason) .. ")")
-        end
-        job.percent = 0.5
-
+        local records = M.build_images(images, M.needs_tags(opts))
         local units = C.collapse(records)
         local layer_opts = { gap = opts.gap, timing = opts.timing, camera = opts.camera, tag = opts.tag,
             parent = opts.parent }
         if opts.refine then layer_opts.base_of = C.base_of_from_tags(units) end
+
+        -- Only frames the burst layer times need the helper.
+        local to_time = M.units_to_time(units, opts.timing, layer_opts.base_of)
+        local precision = "whole"
+        if opts.timing == false then
+            log("timing: off, capture times not read")
+        elseif #to_time == 0 then
+            log("timing: not needed (every frame has a group tag or no capture time)")
+        else
+            local text, why = read_helper_times(to_time, job)
+            flush_log()
+            if why == "cancelled" then
+                say("Assisted Grouping: cancelled, nothing was changed.")
+                return
+            end
+            local reason = why
+            if text then precision, reason = M.apply_subsec(M.members_of(to_time), text) end
+            if precision == "subsecond" then
+                log("timing: sub-second")
+                units = C.collapse(records) -- unit epochs are copied from members at collapse
+            else
+                log("timing: whole seconds for the whole run (" .. tostring(reason) .. ")")
+            end
+        end
+        job.percent = 0.5
+
         local result = C.run_layers(units, layer_opts)
         local wanted = C.wanted_tags(units, result, stamp, layer_opts)
         log(string.format("%d frames in %d groups (%d %s)", #units, count_groups(result.final_of),
@@ -696,6 +786,17 @@ function M.group_images(images, opts)
             log(string.format("parent layer: %d frames have no child or several under %s, not split",
                 count_parent_unsplit(units, opts.parent), opts.parent))
         end
+        local note = ""
+        if opts.tag then
+            local n_has = M.count_tagged(units, opts.tag)
+            log(string.format("tag layer: %d of %d frames have %s", n_has, #units, opts.tag))
+            if n_has == 0 then
+                note = string.format(" No selected photo has the tag %s, so it split nothing; check its spelling and spaces.", opts.tag)
+            end
+        end
+        local timing_label = opts.timing == false and "timing off"
+            or #to_time == 0 and "no timing needed"
+            or precision == "subsecond" and "sub-second timing" or "whole-second timing"
 
         -- Groups need the whole selection, so a cancelled run writes nothing.
         if cancelled(job) then
@@ -714,8 +815,8 @@ function M.group_images(images, opts)
             log(string.format("native groups: %d images grouped, %d skipped (already in a hand-made group)",
                 counts.grouped, counts.skipped))
         end
-        say(string.format("Assisted Grouping: %d images in %d groups (%s timing). Run %s.",
-            #records, count_groups(result.final_of), precision == "subsecond" and "sub-second" or "whole-second", stamp))
+        say(string.format("Assisted Grouping: %d images in %d groups (%s). Run %s.%s",
+            #records, count_groups(result.final_of), timing_label, stamp, note))
     end)
 
     -- Saved once anything may have changed, even if the apply stopped or errored partway,
@@ -724,7 +825,6 @@ function M.group_images(images, opts)
     end_job(job)
     busy = false
     if not okr then notify_error("Assisted Grouping: couldn't run. " .. tostring(err)) end
-    cleanup_tmp()
     log("run finished")
     flush_log()
     run_next()

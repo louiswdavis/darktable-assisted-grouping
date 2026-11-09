@@ -88,7 +88,7 @@ Start darktable, open **preferences → lua options**, and set **Assisted Groupi
 
 ## Using it
 
-Select the photos in lighttable, pick the layers and outputs in the **Assisted Grouping** panel (right side), and click **Group selection**. A progress bar appears in darktable's job area; its cancel button stops the run (see [Cancel](#cancel)). When it finishes, the message line says how many images ended up in how many groups, whether timing was sub-second or whole-second, and the run's stamp.
+Select the photos in lighttable, pick the layers and outputs in the **Assisted Grouping** panel (right side), and click **Group selection**. A progress bar appears in darktable's job area; its cancel button stops the run (see [Cancel](#cancel)). When it finishes, the message line says how many images ended up in how many groups, whether timing was sub-second or whole-second, and the run's stamp. Instead of the timing it says "timing off" when Burst timing is off, or "no timing needed" when Refine already grouped every dated frame; capture times aren't read in either case.
 
 Select **whole bursts, or the whole shoot**. Bursts are built from the selected frames only, so selecting part of a burst splits it. The panel shows this warning permanently.
 
@@ -101,7 +101,7 @@ With **Write group tags** on, every photo gets:
 | Tag | When | Example |
 |---|---|---|
 | `Assisted Grouping\|<stamp>\|Group\|NNNN` | always | `Assisted Grouping\|2026-11-08 14:03:21\|Group\|0007` |
-| `Assisted Grouping\|<stamp>\|Burst\|NNNN` | Burst timing on and another layer or Refine changes the groups | `Assisted Grouping\|2026-11-08 14:03:21\|Burst\|0003` |
+| `Assisted Grouping\|<stamp>\|Burst\|NNNN` | Burst timing on and a camera, tag or parent layer is on (written even when that layer splits nothing) | `Assisted Grouping\|2026-11-08 14:03:21\|Burst\|0003` |
 | `Assisted Grouping\|<stamp>\|Camera\|<maker model lens>` | Camera and lens on | `Assisted Grouping\|2026-11-08 14:03:21\|Camera\|SONY ZV-E10 E PZ 16-50mm F3.5-5.6 OSS` |
 | `Assisted Grouping\|<stamp>\|Tag\|has <tag>` or `…\|not <tag>` | a tag is typed | `Assisted Grouping\|2026-11-08 14:03:21\|Tag\|has Red` |
 | `Assisted Grouping\|<stamp>\|Parent\|<child>` or `…\|none` | a parent tag is typed | `Assisted Grouping\|2026-11-08 14:03:21\|Parent\|42` |
@@ -137,7 +137,9 @@ The plugin records what it made in `assisted_grouping/ledger.csv` in darktable's
 - **While tags are being written** a cancel stops partway and says how many images were updated; run again to finish. The ledger is saved, so the partial tags are still the plugin's.
 - **Once darktable groups have started** a cancel is ignored, so no group is left half-built. The log says when that step starts.
 
-If a job is already running, a second click queues the new job; it starts when the current one finishes.
+If a job is already running, a second click queues the new job; it starts when the current one finishes. A cancel drops every queued job too ("N queued jobs dropped"): it means "stop what I started".
+
+A cancel doesn't wait for the helper. If it is still reading files, it finishes in the background and leaves its temp files in darktable's tmp folder; the next run starts straight away with new ones.
 
 ## Panel options
 
@@ -184,7 +186,7 @@ The burst gap lives here, not in the panel.
 ## How it works
 
 1. **Read the selection.** For each image: id, folder, filename, capture time (`exif_datetime_taken`), maker, model, lens and tags.
-2. **Sub-second times.** darktable's Lua only gives whole seconds, which can't tell the frames of a fast burst apart. The plugin writes a manifest of the dated frames, runs `python/exif_times.py` on it (on Windows through a `.bat` file, like the sibling plugins), and adds each file's sub-second fraction to darktable's time.
+2. **Sub-second times.** darktable's Lua only gives whole seconds, which can't tell the frames of a fast burst apart. The plugin writes a manifest of the dated frames the timing layer uses (one file per frame: the JPEG of a RAW+JPEG pair, else the RAW; none at all with Burst timing off, or for frames Refine already grouped), runs `python/exif_times.py` on it (on Windows through a `.bat` file, like the sibling plugins), and adds each file's sub-second fraction to darktable's time.
 3. **Collapse frames.** RAW+JPEG pairs and duplicates become one frame.
 4. **Run the layers** in order: timing (or refine), camera and lens, tag, parent tag.
 5. **Write.** Tags first (if on), then darktable groups (if on), then the ledger.
@@ -196,9 +198,9 @@ The burst gap lives here, not in the panel.
 - **JPEG:** Pillow reads `SubSecTimeOriginal` (e.g. `897`, i.e. .897 s).
 - **ARW:** Pillow can't read the file, but `exifread` reads both fields from it, so RAW (ARW) files are read directly. This was confirmed on one ZV-E10 ARW; other cameras and other RAW formats are untested.
 
-As a backup, a RAW the helper still can't read **borrows the fraction from the JPEG of the same frame** (same folder and filename stem, extension ignored, stem case-sensitive) when that JPEG is in the selection. Only the fraction comes from the helper; the whole seconds always come from darktable.
+When a frame's JPEG is in the selection, only the JPEG is read and **the RAW borrows its fraction** (same folder and filename stem, extension ignored, stem case-sensitive). That halves the reads on a RAW+JPEG shoot. If that JPEG has no readable sub-second time, the RAW isn't tried and the run uses whole seconds. Only the fraction comes from the helper; the whole seconds always come from darktable.
 
-If any dated frame ends up with no fraction (a RAW neither reader can open and with no JPEG to borrow from, a file without the field, or the helper failing), **the whole run uses whole seconds**, so precision is never mixed. The log says which, and why:
+If any timed frame ends up with no fraction (a RAW-only frame neither reader can open, a file without the field, or the helper failing), **the whole run uses whole seconds**, so precision is never mixed. The log says which, and why:
 
 - `timing: sub-second`
 - `timing: whole seconds for the whole run (image 1234 has no readable sub-second time)`
@@ -215,9 +217,11 @@ Capture times use a constant offset with no daylight saving (`isdst = false`), s
 - **Every run writes a log** to `assisted_grouping.log` in darktable's config directory (`%LOCALAPPDATA%\darktable\assisted_grouping.log` on Windows); the run before it is kept as `assisted_grouping.prev.log`. It has the run stamp and every setting, the timing line, the frame and group counts, how many photos the parent layer left unsplit, the tags attached and detached, the darktable groups made and skipped, every message shown on screen, and the helper's errors. Start here when a result looks wrong.
 - **"the plugin folder preference (…) has no python/exif_times.py."** Point the preference at the `darktable-assisted-grouping` folder, or clear it to auto-detect.
 - **The run always says whole-second.** Read the reason on the `timing:` line. If it names a RAW image, the helper couldn't read that RAW (check that `exifread` is installed in the interpreter, or select the JPEGs too). "exif_times.py stopped with exit code …" usually means the interpreter has no Pillow: install `python/requirements.txt` into it.
-- **"another job is still running."** Wait, or cancel it from the progress bar. "the last run is still stopping" means the helper from a cancelled run hasn't exited yet; try again in a moment.
+- **"another job is still running."** Wait, or cancel it from the progress bar.
+- **"No selected photo has the tag …"** The tag layer matched nothing, so every photo is `not …`. Check the spelling and spaces against the tagging module (`Cars|Red`, not `Cars | Red`).
+- **`dt_assisted_grouping_*` files in darktable's tmp folder** are from a helper that was still running at a cancel or the 10-minute timeout. They're safe to delete once it has finished.
 - **Some photos weren't put into a darktable group.** The log's `native groups: … skipped (already in a hand-made group)` counts them. Take them out of that group by hand if you want the plugin to group them.
-- **"couldn't write the ledger …"** logged: the tags that run attached will look hand-made next time. Check that darktable's config directory is writable.
+- **"couldn't save the ledger …"** on screen: the tags and groups that run made will look hand-made next time, and the old ledger is left as it was. Check that darktable's config directory is writable and the disk isn't full.
 
 ## Limitations
 
@@ -269,7 +273,7 @@ The darktable side has never run: it was written without darktable to test again
 **Clear, cancel, refusal**
 
 14. **Clear.** With the same selection, click **Clear grouping marks**. *Expect:* "cleared grouping marks from N images"; the plugin's tags and darktable groups are gone; your own tag and the hand-made group are still there; the cleared images' rows are gone from `ledger.csv`; each RAW+JPEG pair is still one darktable group (two images per stack with grouping on), and the log's `clear:` line counts the `frame groups restored`.
-15. **Cancel before applying.** Select all 30-60 frames, run, and cancel from the progress bar straight away. *Expect:* "cancelled, nothing was changed." and no new tags or groups. (If the run finished before you could cancel, note that instead.) Wait a few seconds after the cancel before the next run.
+15. **Cancel before applying.** Select all 30-60 frames, run, and cancel from the progress bar straight away. *Expect:* "cancelled, nothing was changed." and no new tags or groups. (If the run finished before you could cancel, note that instead.) Click **Group selection** again straight after. *Expect:* it starts at once (no "still stopping" message) and finishes normally.
 16. **Both outputs off.** Untick both outputs and click **Group selection**. *Expect:* the run refuses with "turn on at least one output (group tags or darktable groups)" and nothing changes.
 
 ### Report what breaks

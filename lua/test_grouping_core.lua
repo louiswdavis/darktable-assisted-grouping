@@ -522,6 +522,102 @@ sf, smiss = C.subsec_fractions({ srec(1, "/s", "DSC1.ARW"), srec(2, "/s", "DSC1.
 check("subsec_fractions: blank pair has no fraction; untimed records are ignored",
     tostring(sf[1]) .. tostring(sf[2]) .. tostring(sf[3]) .. " / " .. tostring(smiss), "nilnilnil / 1")
 
+-- ledger on Windows: text mode writes CRLF ----------------------------------------
+local crlf = C.ledger_parse((ledger_text:gsub("\n", "\r\n")))
+check("ledger_parse of CRLF text matches LF", C.ledger_format(crlf), ledger_text)
+
+-- wanted_tags: Refine alone writes no Burst --------------------------------------
+local refine_units = C.collapse({
+    { id = 1, dir = "/r", filename = "A.JPG", epoch = 0, tags = { [newer] = true } },
+    { id = 2, dir = "/r", filename = "B.JPG", epoch = 100, tags = {} },
+})
+local refine_opts = { gap = 2, base_of = C.base_of_from_tags(refine_units) }
+local refine_wanted = C.wanted_tags(refine_units, C.run_layers(refine_units, refine_opts), STAMP, refine_opts)
+check("wanted_tags: Refine alone writes Group only", keys(refine_wanted[2]),
+    "Assisted Grouping|2026-11-08 22:45:10|Group|0002")
+
+-- assisted_grouping.lua pure helpers (loads without darktable) ---------------------
+local A = require("assisted_grouping")
+
+check("needs_tags: defaults minus tag writer read no tags", A.needs_tags({ timing = true, native_groups = true }), false)
+check("needs_tags: tag writer reads tags", A.needs_tags({ write_tags = true }), true)
+check("needs_tags: Refine reads tags", A.needs_tags({ refine = true }), true)
+
+local function arec(id, filename, epoch, tags)
+    return { id = id, dir = "/a", filename = filename, file = "/a/" .. filename, epoch = epoch, tags = tags or {} }
+end
+local a_units = C.collapse({
+    arec(1, "DSC1.ARW", 100), arec(2, "DSC1.JPG", 100),
+    arec(3, "DSC2.ARW", 200),
+    arec(4, "DSC3.ARW", 300), arec(5, "DSC3.JPG", nil),
+    arec(6, "DSC4.JPG", nil),
+})
+local function row_ids(rows)
+    local out = {}
+    for _, r in ipairs(rows) do out[#out + 1] = r[1] end
+    return table.concat(out, ",")
+end
+check("manifest_rows: one row per frame, the JPEG of a pair, a RAW alone, undated JPEG skipped, untimed frame left out",
+    row_ids(A.manifest_rows(a_units)), "2,3,4")
+
+check("units_to_time: timing off times nothing", #A.units_to_time(a_units, false, nil), 0)
+check("units_to_time: untimed frame left out", #A.units_to_time(a_units, true, nil), 3)
+check("units_to_time: frames with a Refine group left out", #A.units_to_time(a_units, true, { [1] = 1, [3] = 1 }), 1)
+check("members_of: every member of the units", #A.members_of(a_units), 6)
+
+local sub_units = C.collapse({ arec(1, "DSC1.ARW", 100), arec(2, "DSC1.JPG", 100) })
+local sub_members = A.members_of(sub_units)
+local prec = A.apply_subsec(sub_members, "2,1780308000.5\r\n#precision,subsecond\r\n")
+check("apply_subsec: RAW not sent borrows its JPEG's fraction (CRLF results)",
+    prec == "subsecond" and near(sub_members[1].epoch, 100.5) and near(sub_members[2].epoch, 100.5), true)
+local whole_members = A.members_of(C.collapse({ arec(1, "DSC1.JPG", 100) }))
+local wprec, wwhy = A.apply_subsec(whole_members, "1,1780308000\n#precision,whole\n")
+check("apply_subsec: whole precision leaves epochs", wprec .. " " .. tostring(whole_members[1].epoch), "whole 100")
+check("apply_subsec: whole precision says why", wwhy ~= nil, true)
+check("apply_subsec: nothing timed", select(2, A.apply_subsec({ arec(1, "X.JPG", nil) }, "")), "no frame has a capture time")
+
+local by_id, hprec = A.parse_helper_results("7,1780308000.25\n8,\n#precision,subsecond\n")
+check("parse_helper_results: rows and precision", by_id[7] .. "|" .. by_id[8] .. "|" .. hprec, "1780308000.25||subsecond")
+
+check("count_tagged: frames with the tag", A.count_tagged(C.collapse({ arec(1, "A.JPG", 1, { ["Cars|Red"] = true }),
+    arec(2, "B.JPG", 1) }), "Cars|Red"), 1)
+check("count_tagged: a spelling with spaces matches nothing", A.count_tagged(C.collapse({ arec(1, "A.JPG", 1, { ["Cars|Red"] = true }) }),
+    "Cars | Red"), 0)
+
+local ptc = A.plan_tag_changes({ arec(1, "A.JPG", 1, { ["old"] = true, ["hand"] = true }) },
+    { [1] = { ["new"] = true } }, { [1] = { tags = { ["old"] = true, ["gone"] = true } } })
+check("plan_tag_changes: detaches own tag, keeps hand-made, attaches new",
+    table.concat(ptc[1].remove, ",") .. " / " .. table.concat(ptc[1].add, ","), "old / new")
+check("plan_tag_changes: ledger tag removed by hand is dropped", ptc[1].mine["gone"], nil)
+
+local lg = { [1] = { tags = { x = true } } }
+A.set_ledger_tags(lg, 1, {})
+check("set_ledger_tags: empty entry dropped", lg[1], nil)
+A.set_ledger_native(lg, 2, 2)
+A.set_ledger_tags(lg, 2, {})
+check("set_ledger_tags: entry with a native leader kept", lg[2] and lg[2].native, 2)
+A.set_ledger_native(lg, 2, nil)
+check("set_ledger_native: cleared entry dropped", lg[2], nil)
+
+local s1, t1 = A.run_stamp(1000, nil)
+local s2, t2 = A.run_stamp(1000, t1)
+check("run_stamp: same second steps forward", t2 == t1 + 1 and s2 > s1, true)
+check("run_stamp: later time used as is", select(2, A.run_stamp(2000, t2)), 2000)
+
+check("utf16le: ASCII", A.utf16le("A"), "A\0")
+check("utf16le: two-byte char", A.utf16le("é"), "\xE9\0")
+check("utf16le: astral char is a surrogate pair", A.utf16le("😀"), "\x3D\xD8\x00\xDE")
+
+local tmp_path = os.tmpname()
+check("write_file_atomic: replaces an existing file", A.write_file_atomic(tmp_path, "one\n") and A.write_file_atomic(tmp_path, "two\n"), true)
+check("write_file_atomic: new text read back", A.read_file_or_tmp(tmp_path), "two\n")
+check("write_file_atomic: no .tmp left", io.open(tmp_path .. ".tmp", "r"), nil)
+os.remove(tmp_path)
+local tf = io.open(tmp_path .. ".tmp", "w"); tf:write("saved\n"); tf:close()
+check("read_file_or_tmp: falls back to .tmp when the file is missing", A.read_file_or_tmp(tmp_path), "saved\n")
+os.remove(tmp_path .. ".tmp")
+check("write_file_atomic: unwritable folder fails", A.write_file_atomic("/nonexistent-dir-xyz/ledger.csv", "x"), nil)
+
 -- summary --------------------------------------------------------------------
 if failures > 0 then
     print(string.format("%d failure(s)", failures))
