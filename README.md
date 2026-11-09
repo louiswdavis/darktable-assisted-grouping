@@ -101,12 +101,12 @@ With **Write group tags** on, every photo gets:
 | Tag | When | Example |
 |---|---|---|
 | `Assisted Grouping\|<stamp>\|Group\|NNNN` | always | `Assisted Grouping\|2026-11-08 14:03:21\|Group\|0007` |
-| `Assisted Grouping\|<stamp>\|Burst\|NNNN` | Burst timing on | `Assisted Grouping\|2026-11-08 14:03:21\|Burst\|0003` |
+| `Assisted Grouping\|<stamp>\|Burst\|NNNN` | Burst timing on and another layer or Refine changes the groups | `Assisted Grouping\|2026-11-08 14:03:21\|Burst\|0003` |
 | `Assisted Grouping\|<stamp>\|Camera\|<maker model lens>` | Camera and lens on | `Assisted Grouping\|2026-11-08 14:03:21\|Camera\|SONY ZV-E10 E PZ 16-50mm F3.5-5.6 OSS` |
 | `Assisted Grouping\|<stamp>\|Tag\|has <tag>` or `…\|not <tag>` | a tag is typed | `Assisted Grouping\|2026-11-08 14:03:21\|Tag\|has Red` |
 | `Assisted Grouping\|<stamp>\|Parent\|<child>` or `…\|none` | a parent tag is typed | `Assisted Grouping\|2026-11-08 14:03:21\|Parent\|42` |
 
-- `Group` is the final group after every layer; it's the one to read. `Burst` is the timing layer's result alone, for a consumer that only wants bursts. With **Refine existing groups** on, `Burst` instead holds the starting groups, i.e. the earlier run's final groups with its camera, tag and parent splits included, so it no longer means bursts alone.
+- `Group` is the final group after every layer; it's the one to read. When timing is the only layer, `Burst` would repeat `Group` exactly, so it is not written. `Burst` is the timing layer's result alone, for a consumer that only wants bursts. With **Refine existing groups** on, `Burst` instead holds the starting groups, i.e. the earlier run's final groups with its camera, tag and parent splits included, so it no longer means bursts alone.
 - Numbers are four digits, zero-padded, counted from `0001` within a run.
 - `Camera` is maker, model and lens joined with spaces; `unknown` when darktable has none of them.
 - `Tag` uses the last segment of the tag you typed (`Cars|Red` gives `has Red`).
@@ -251,7 +251,7 @@ The darktable side has never run: it was written without darktable to test again
 
 4. **Select 30-60 frames with both RAW and JPEG of each frame**, including a fast burst, a night shot and frames from two different lenses. In the panel: Burst timing on, Write group tags on, Apply darktable groups off. Click **Group selection**. *Expect:* a progress bar, then "Assisted Grouping: N images in M groups (sub-second timing). Run YYYY-MM-DD HH:MM:SS."
 5. **Check the log** at `%LOCALAPPDATA%\darktable\assisted_grouping.log`. *Expect:* `group started`, the `run stamp …` settings line, `timing: sub-second`, `… frames in … groups (… bursts)`, `tags: … attached, 0 detached`, `run finished`.
-6. **Check the tags** in the tagging module. *Expect:* each image has `Assisted Grouping|<stamp>|Group|NNNN` and `Assisted Grouping|<stamp>|Burst|NNNN`; the frames of the fast burst share one `Group` number; a RAW and its JPEG have identical tags; the night shot has its own tags like the rest.
+6. **Check the tags** in the tagging module. *Expect:* each image has `Assisted Grouping|<stamp>|Group|NNNN` (and no `Burst` tag, since timing is the only layer); the frames of the fast burst share one `Group` number; a RAW and its JPEG have identical tags; the night shot has its own tags like the rest.
 7. **RAW-only frames.** Select only the RAW (ARW) files of a few frames and run again. *Expect:* "(sub-second timing)" on screen and `timing: sub-second` in the log, since the helper reads ARW directly. If it says whole-second instead, note the image the `timing:` line names and run `.venv\Scripts\python python\probe_subsec.py <that file>` on it (macOS/Linux: `.venv/bin/python python/probe_subsec.py <that file>`).
 
 **Layers**

@@ -271,7 +271,7 @@ function M.wanted_tags(units, result, stamp, opts)
     for _, unit in ipairs(units) do
         local set = {}
         set[M.group_tag(stamp, "Group", result.final_of[unit.id])] = true
-        if result.timing ~= false then
+        if result.timing ~= false and result.final_of ~= result.burst_of then
             set[M.group_tag(stamp, "Burst", result.burst_of[unit.id])] = true
         end
         if result.camera_of then

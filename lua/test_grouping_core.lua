@@ -249,8 +249,8 @@ check("wanted_tags: pair carries every layer's tag", keys(wanted[10]),
 check("wanted_tags: absent tag and child read not/none", wanted[12]["Assisted Grouping|2026-11-08 22:45:10|Tag|not Red"]
     and wanted[12]["Assisted Grouping|2026-11-08 22:45:10|Parent|none"], true)
 local plain = C.wanted_tags(pair, C.run_layers(pair, { gap = 2 }), STAMP, { gap = 2 })
-check("wanted_tags: layers off add only Group and Burst", keys(plain[12]),
-    "Assisted Grouping|2026-11-08 22:45:10|Burst|0002 + Assisted Grouping|2026-11-08 22:45:10|Group|0002")
+check("wanted_tags: timing alone writes Group only (Burst would be identical)", keys(plain[12]),
+    "Assisted Grouping|2026-11-08 22:45:10|Group|0002")
 
 -- latest_group_tag -----------------------------------------------------------
 local older = "Assisted Grouping|2026-01-01 10:00:00|Group|0003"
