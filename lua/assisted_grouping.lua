@@ -751,7 +751,7 @@ function M.clear_marks(images)
         for _, img in ipairs(images) do
             local id = tonumber(img.id)
             if ledger[id] then
-                records[#records + 1] = { id = id, img = img, tags = M.tags_of(img) }
+                records[#records + 1] = { id = id, img = img, tags = M.tags_of(img), dir = img.path, filename = img.filename }
                 local list = {}
                 for _, other in ipairs(img:get_group_members()) do list[#list + 1] = { id = tonumber(other.id) } end
                 members_of[id] = list
@@ -780,7 +780,9 @@ function M.clear_marks(images)
         end
 
         changed = true
-        for _, plan in ipairs(C.plan_clear(records, ledger, members_of)) do
+        local plans, restore = C.plan_clear(records, ledger, members_of)
+        local ungrouped = {}
+        for _, plan in ipairs(plans) do
             local entry, img = ledger[plan.id], img_of[plan.id]
             local left = {}
             for _, name in ipairs(plan.detach) do
@@ -796,6 +798,7 @@ function M.clear_marks(images)
                 -- No leader argument: darktable moves the image into a group of its own.
                 if write(function() img:group_with() end) then
                     n_ungrouped = n_ungrouped + 1
+                    ungrouped[plan.id] = true
                 else
                     native = entry.native
                 end
@@ -803,8 +806,25 @@ function M.clear_marks(images)
             M.set_ledger_tags(ledger, plan.id, left)
             M.set_ledger_native(ledger, plan.id, native)
         end
-        log(string.format("clear: %d images, %d tags detached, %d taken out of native groups, %d failed",
-            #records, n_tags, n_ungrouped, failed))
+        -- Every image above was detached into a group of its own before any attach here,
+        -- so re-forming a frame's group can't pull a leader out of another group.
+        -- These are darktable's import groups, not the plugin's, so the ledger skips them.
+        local n_restored = 0
+        for _, group in ipairs(restore) do
+            local ok_ids = {}
+            for _, id in ipairs(group.members) do
+                if ungrouped[id] then ok_ids[#ok_ids + 1] = id end
+            end
+            if #ok_ids >= 2 then
+                local leader = img_of[ok_ids[1]]
+                for i = 2, #ok_ids do
+                    write(function() img_of[ok_ids[i]]:group_with(leader) end)
+                end
+                n_restored = n_restored + 1
+            end
+        end
+        log(string.format("clear: %d images, %d tags detached, %d taken out of native groups, %d frame groups restored, %d failed",
+            #records, n_tags, n_ungrouped, n_restored, failed))
         if failed > 0 then
             notify_error(string.format("Assisted Grouping: couldn't clear %d marks: %s", failed, first_error))
         end

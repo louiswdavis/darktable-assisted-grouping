@@ -556,9 +556,13 @@ end
 -- detach = sorted ledger tags still on it, ungroup = whether to take it out of a
 -- native group the plugin made. records = { id, tags = set }; members_of[id] = the
 -- image's current native group members ({ id }). Hand-made tags and groups are
--- never listed. Returns plans in record order.
+-- never listed. Returns plans in record order, and restore groups: ungrouped images
+-- of one frame (frame_key: same dir and stem; records need `dir` and `filename` to
+-- join one) that number 2+ go back into one native group under their lowest id, so
+-- Clear doesn't break up a RAW+JPEG pair or duplicates that darktable grouped at
+-- import. Restore = { { leader, members = sorted ids } }, sorted by leader.
 function M.plan_clear(records, ledger, members_of)
-    local plans = {}
+    local plans, by_frame = {}, {}
     for _, r in ipairs(records) do
         local entry = ledger[r.id]
         if entry then
@@ -570,9 +574,22 @@ function M.plan_clear(records, ledger, members_of)
             local ungroup = entry.native ~= nil
                 and still_in_ledger_group(r.id, entry.native, members_of[r.id], ledger)
             plans[#plans + 1] = { id = r.id, detach = detach, ungroup = ungroup }
+            if ungroup and r.filename then
+                local k = frame_key(r)
+                by_frame[k] = by_frame[k] or {}
+                table.insert(by_frame[k], r.id)
+            end
         end
     end
-    return plans
+    local restore = {}
+    for _, ids in pairs(by_frame) do
+        if #ids >= 2 then
+            table.sort(ids)
+            restore[#restore + 1] = { leader = ids[1], members = ids }
+        end
+    end
+    table.sort(restore, function(a, b) return a.leader < b.leader end)
+    return plans, restore
 end
 
 return M

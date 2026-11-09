@@ -106,7 +106,7 @@ With **Write group tags** on, every photo gets:
 | `Assisted Grouping\|<stamp>\|Tag\|has <tag>` or `…\|not <tag>` | a tag is typed | `Assisted Grouping\|2026-11-08 14:03:21\|Tag\|has Red` |
 | `Assisted Grouping\|<stamp>\|Parent\|<child>` or `…\|none` | a parent tag is typed | `Assisted Grouping\|2026-11-08 14:03:21\|Parent\|42` |
 
-- `Group` is the final group after every layer; it's the one to read. `Burst` is the timing layer's result alone, for a consumer that only wants bursts.
+- `Group` is the final group after every layer; it's the one to read. `Burst` is the timing layer's result alone, for a consumer that only wants bursts. With **Refine existing groups** on, `Burst` instead holds the starting groups, i.e. the earlier run's final groups with its camera, tag and parent splits included, so it no longer means bursts alone.
 - Numbers are four digits, zero-padded, counted from `0001` within a run.
 - `Camera` is maker, model and lens joined with spaces; `unknown` when darktable has none of them.
 - `Tag` uses the last segment of the tag you typed (`Cars|Red` gives `has Red`).
@@ -125,7 +125,7 @@ A RAW and a JPEG with the same folder and filename stem (extension ignored, stem
 
 **Refine existing groups.** Instead of burst timing, the starting groups are each photo's `Group` tag from the latest earlier run (latest stamp wins when a photo has several). Photos with no group tag are timed among themselves (or share one group when Burst timing is off). Camera, tag and parent layers then divide as usual. The tags are the source of truth here: changes you made to darktable groups by hand are not read. The old tags are then replaced as in a normal run.
 
-**Clear grouping marks** removes, from the selected images only, the tags and darktable groups the ledger says the plugin made, and drops their ledger rows. An image you moved out of a plugin group by hand is left where it is. Your own tags and groups stay.
+**Clear grouping marks** removes, from the selected images only, the tags and darktable groups the ledger says the plugin made, and drops their ledger rows. An image you moved out of a plugin group by hand is left where it is. Your own tags and groups stay. The selected images of one frame (a RAW+JPEG pair or duplicates, same folder and filename stem) that Clear takes out of a plugin group are put back into one darktable group, led by the lowest id, so Clear doesn't break up the pairs darktable grouped at import.
 
 ### The ledger
 
@@ -268,7 +268,7 @@ The darktable side has never run: it was written without darktable to test again
 
 **Clear, cancel, refusal**
 
-14. **Clear.** With the same selection, click **Clear grouping marks**. *Expect:* "cleared grouping marks from N images"; the plugin's tags and darktable groups are gone; your own tag and the hand-made group are still there; the cleared images' rows are gone from `ledger.csv`.
+14. **Clear.** With the same selection, click **Clear grouping marks**. *Expect:* "cleared grouping marks from N images"; the plugin's tags and darktable groups are gone; your own tag and the hand-made group are still there; the cleared images' rows are gone from `ledger.csv`; each RAW+JPEG pair is still one darktable group (two images per stack with grouping on), and the log's `clear:` line counts the `frame groups restored`.
 15. **Cancel before applying.** Select all 30-60 frames, run, and cancel from the progress bar straight away. *Expect:* "cancelled, nothing was changed." and no new tags or groups. (If the run finished before you could cancel, note that instead.) Wait a few seconds after the cancel before the next run.
 16. **Both outputs off.** Untick both outputs and click **Group selection**. *Expect:* the run refuses with "turn on at least one output (group tags or darktable groups)" and nothing changes.
 

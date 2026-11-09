@@ -460,6 +460,36 @@ local stale = C.plan_clear({ { id = 2, tags = {} } }, { [2] = { tags = {}, nativ
     { [2] = { { id = 2 }, { id = 6 } } })
 check("plan_clear: group still ours after its leader left (another member shares the leader id)",
     stale[1].ungroup, true)
+local _, no_name_restore = C.plan_clear(clear_records, clear_ledger, clear_members)
+check("plan_clear: records without filenames get no restore group", #no_name_restore, 0)
+
+-- Two RAW+JPEG frames (11/12 and 13/14) regrouped by the plugin under 11, then cleared;
+-- 15 is a lone image in the same plugin group; 21/22 are two frames with plugin tags that
+-- the user grouped by hand.
+local function crec(id, filename) return { id = id, tags = {}, dir = "/s", filename = filename } end
+local pair_ledger = {
+    [11] = { tags = {}, native = 11 }, [12] = { tags = {}, native = 11 },
+    [13] = { tags = {}, native = 11 }, [14] = { tags = {}, native = 11 },
+    [15] = { tags = {}, native = 11 },
+    [21] = { tags = { ["AG|x"] = true } }, [22] = { tags = { ["AG|x"] = true } },
+}
+local plugin_group = { { id = 11 }, { id = 12 }, { id = 13 }, { id = 14 }, { id = 15 } }
+local hand_group = { { id = 21 }, { id = 22 } }
+local pplans, prestore = C.plan_clear(
+    { crec(11, "DSC1.ARW"), crec(12, "DSC1.JPG"), crec(13, "DSC2.ARW"), crec(14, "DSC2.JPG"),
+      crec(15, "DSC3.ARW"), crec(21, "DSC4.JPG"), crec(22, "DSC5.JPG") },
+    pair_ledger,
+    { [11] = plugin_group, [12] = plugin_group, [13] = plugin_group, [14] = plugin_group,
+      [15] = plugin_group, [21] = hand_group, [22] = hand_group })
+local function restore_str(rs)
+    local out = {}
+    for _, g in ipairs(rs) do out[#out + 1] = g.leader .. ":" .. table.concat(g.members, ",") end
+    return table.concat(out, " ")
+end
+check("plan_clear: two cleared RAW+JPEG pairs -> two restore groups under their lowest ids",
+    restore_str(prestore), "11:11,12 13:13,14")
+check("plan_clear: a lone image gets no restore group", restore_str(prestore):find("15") == nil, true)
+check("plan_clear: hand-made cross-frame group is left alone", pplans[6].ungroup or pplans[7].ungroup, false)
 
 -- subsec_fractions ------------------------------------------------------------------
 local function srec(id, dir, filename, epoch) return { id = id, dir = dir, filename = filename, epoch = epoch == nil and 100 or epoch } end
