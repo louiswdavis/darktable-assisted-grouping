@@ -619,6 +619,13 @@ check("read_file_or_tmp: falls back to .tmp when the file is missing", A.read_fi
 os.remove(tmp_path .. ".tmp")
 check("write_file_atomic: unwritable folder fails", A.write_file_atomic("/nonexistent-dir-xyz/ledger.csv", "x"), nil)
 
+require("test_preset_block")(A, check)
+
+local pd = A.preset_defaults(A.PRESET_SCHEMA)
+check("preset schema: defaults", string.format("%s %s %s [%s] [%s] %s %s %s", pd.burst_gap_seconds, pd.timing, pd.camera,
+    pd.tag, pd.parent, pd.refine, pd.native_groups, pd.write_tags), "2 true false [] [] false true false")
+check("preset schema: decimal gap kept", A.preset_merge(A.PRESET_SCHEMA, A.preset_decode('{"burst_gap_seconds": 0.5}')).burst_gap_seconds, 0.5)
+
 -- summary --------------------------------------------------------------------
 if failures > 0 then
     print(string.format("%d failure(s)", failures))

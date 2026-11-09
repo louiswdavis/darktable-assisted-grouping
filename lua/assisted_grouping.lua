@@ -518,7 +518,19 @@ function M.parse_gap(s)
 end
 
 M.ERR_NO_OUTPUT = "turn on at least one output (group tags or darktable groups)"
-M.ERR_BAD_GAP = "the burst gap preference must be a number of seconds above 0, e.g. 2 or 0.5"
+M.ERR_BAD_GAP = "the burst gap must be a number of seconds above 0, e.g. 2 or 0.5"
+
+-- Every panel setting a preset stores, in panel order.
+M.PRESET_SCHEMA = {
+    { key = "burst_gap_seconds", kind = "number", default = 2 },
+    { key = "timing", kind = "bool", default = true },
+    { key = "camera", kind = "bool", default = false },
+    { key = "tag", kind = "string", default = "" },
+    { key = "parent", kind = "string", default = "" },
+    { key = "refine", kind = "bool", default = false },
+    { key = "native_groups", kind = "bool", default = true },
+    { key = "write_tags", kind = "bool", default = false },
+}
 M.ERR_NO_LAYER = "turn on at least one layer (burst timing, camera and lens, tag or parent tag), or Refine existing groups"
 
 -- p = { timing, gap_text, camera, tag, parent, refine, write_tags, native_groups } as
@@ -823,6 +835,215 @@ function M.pythonw_of(py)
     return nil
 end
 
+-- Preset block: drift-guarded copy in grouping, culling and tagging. Change all three
+-- (test_preset_block.lua is the matching tests). Presets are flat JSON objects: string,
+-- number and boolean values only, so a small codec does instead of a JSON library.
+-- Schema item: { key, kind = "bool"|"string"|"number"|"choice", default, choices }.
+
+local function utf8_char(cp)
+    if cp < 0x80 then return string.char(cp) end
+    if cp < 0x800 then return string.char(0xC0 + math.floor(cp / 0x40), 0x80 + cp % 0x40) end
+    if cp < 0x10000 then
+        return string.char(0xE0 + math.floor(cp / 0x1000), 0x80 + math.floor(cp / 0x40) % 0x40, 0x80 + cp % 0x40)
+    end
+    return string.char(0xF0 + math.floor(cp / 0x40000), 0x80 + math.floor(cp / 0x1000) % 0x40,
+        0x80 + math.floor(cp / 0x40) % 0x40, 0x80 + cp % 0x40)
+end
+
+local JSON_ESCAPES = { ['"'] = '"', ["\\"] = "\\", ["/"] = "/", b = "\b", f = "\f", n = "\n", r = "\r", t = "\t" }
+
+-- Returns the decoded flat object, or nil and why.
+function M.preset_decode(text)
+    if type(text) ~= "string" then return nil, "no text" end
+    local pos = 1
+    if text:sub(1, 3) == "\239\187\191" then pos = 4 end
+    local function skip() pos = text:find("[^ \t\r\n]", pos) or (#text + 1) end
+    local function fail(why) return nil, string.format("%s at character %d", why, pos) end
+    local function read_string()
+        pos = pos + 1 -- opening quote
+        local out = {}
+        while true do
+            local c = text:sub(pos, pos)
+            if c == "" then return nil end
+            if c == '"' then pos = pos + 1; return table.concat(out) end
+            if c == "\\" then
+                local e = text:sub(pos + 1, pos + 1)
+                if e == "u" then
+                    local cp = tonumber(text:sub(pos + 2, pos + 5), 16)
+                    if not cp or #text:sub(pos + 2, pos + 5) ~= 4 then return nil end
+                    pos = pos + 6
+                    if cp >= 0xD800 and cp <= 0xDBFF and text:sub(pos, pos + 1) == "\\u" then
+                        local lo = tonumber(text:sub(pos + 2, pos + 5), 16)
+                        if lo and lo >= 0xDC00 and lo <= 0xDFFF then
+                            cp = 0x10000 + (cp - 0xD800) * 0x400 + (lo - 0xDC00)
+                            pos = pos + 6
+                        end
+                    end
+                    out[#out + 1] = utf8_char(cp)
+                elseif JSON_ESCAPES[e] then
+                    out[#out + 1] = JSON_ESCAPES[e]
+                    pos = pos + 2
+                else
+                    return nil
+                end
+            else
+                local stop = text:find('["\\]', pos) or (#text + 1)
+                out[#out + 1] = text:sub(pos, stop - 1)
+                pos = stop
+            end
+        end
+    end
+
+    skip()
+    if text:sub(pos, pos) ~= "{" then return fail("expected {") end
+    pos = pos + 1
+    local obj = {}
+    skip()
+    if text:sub(pos, pos) == "}" then
+        pos = pos + 1
+    else
+        while true do
+            skip()
+            if text:sub(pos, pos) ~= '"' then return fail("expected a key") end
+            local key = read_string()
+            if not key then return fail("bad key") end
+            skip()
+            if text:sub(pos, pos) ~= ":" then return fail("expected :") end
+            pos = pos + 1
+            skip()
+            local c = text:sub(pos, pos)
+            if c == '"' then
+                local v = read_string()
+                if not v then return fail("bad string") end
+                obj[key] = v
+            elseif c == "t" and text:sub(pos, pos + 3) == "true" then
+                obj[key] = true; pos = pos + 4
+            elseif c == "f" and text:sub(pos, pos + 4) == "false" then
+                obj[key] = false; pos = pos + 5
+            elseif c == "n" and text:sub(pos, pos + 3) == "null" then
+                obj[key] = nil; pos = pos + 4
+            elseif c == "{" or c == "[" then
+                return fail("nested values aren't supported")
+            else
+                local num = text:match("^-?%d+%.?%d*[eE]?[-+]?%d*", pos)
+                local v = num and tonumber(num)
+                if not v then return fail("bad value") end
+                obj[key] = v
+                pos = pos + #num
+            end
+            skip()
+            local sep = text:sub(pos, pos)
+            pos = pos + 1
+            if sep == "}" then break end
+            if sep ~= "," then pos = pos - 1; return fail("expected , or }") end
+        end
+    end
+    skip()
+    if pos <= #text then return fail("unexpected text after }") end
+    return obj
+end
+
+local function json_string(s)
+    return '"' .. s:gsub('[%c"\\]', function(c)
+        if c == '"' then return '\\"' end
+        if c == "\\" then return "\\\\" end
+        if c == "\n" then return "\\n" end
+        if c == "\r" then return "\\r" end
+        if c == "\t" then return "\\t" end
+        return string.format("\\u%04x", c:byte())
+    end) .. '"'
+end
+
+local function json_number(n)
+    if n == math.floor(n) and math.abs(n) < 2 ^ 53 then return string.format("%d", n) end
+    return string.format("%.14g", n)
+end
+
+-- One key per line in schema order, "version" first.
+function M.preset_encode(schema, settings)
+    local lines = { '  "version": 1' }
+    for _, item in ipairs(schema) do
+        local v = settings[item.key]
+        if v == nil then v = item.default end
+        local text
+        if type(v) == "boolean" then text = tostring(v)
+        elseif type(v) == "number" then text = json_number(v)
+        else text = json_string(tostring(v)) end
+        lines[#lines + 1] = "  " .. json_string(item.key) .. ": " .. text
+    end
+    return "{\n" .. table.concat(lines, ",\n") .. "\n}\n"
+end
+
+local function preset_value_ok(item, v)
+    if item.kind == "bool" then return type(v) == "boolean" end
+    if item.kind == "number" then return type(v) == "number" end
+    if item.kind == "string" then return type(v) == "string" end
+    if type(v) ~= "string" then return false end
+    for _, c in ipairs(item.choices or {}) do
+        if c == v then return true end
+    end
+    return false
+end
+
+function M.preset_defaults(schema)
+    local out = {}
+    for _, item in ipairs(schema) do out[item.key] = item.default end
+    return out
+end
+
+-- Every schema key set: the decoded value when valid, else the default. Returns the
+-- settings and the keys whose stored value was unusable (missing keys aren't problems).
+function M.preset_merge(schema, decoded)
+    local out, problems = {}, {}
+    for _, item in ipairs(schema) do
+        local v = decoded and decoded[item.key]
+        if v == nil then
+            out[item.key] = item.default
+        elseif preset_value_ok(item, v) then
+            out[item.key] = v
+        else
+            out[item.key] = item.default
+            problems[#problems + 1] = item.key
+        end
+    end
+    return out, problems
+end
+
+function M.preset_equal(schema, a, b)
+    for _, item in ipairs(schema) do
+        if a[item.key] ~= b[item.key] then return false end
+    end
+    return true
+end
+
+-- Same characters as a folder name can't hold on Windows; "template" is the built-in preset.
+function M.preset_name_ok(raw)
+    local name = (raw or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if name == "" then return nil, "empty" end
+    if name:lower() == "template" then return nil, "reserved" end
+    if name:find('[/\\:*?"<>|]') then return nil, "bad character" end
+    return name
+end
+
+-- "template" first, then the names sorted case-insensitively, without duplicates.
+function M.preset_order(names)
+    local seen, rest = {}, {}
+    for _, n in ipairs(names) do
+        if n:lower() ~= "template" and not seen[n] then
+            seen[n] = true
+            rest[#rest + 1] = n
+        end
+    end
+    table.sort(rest, function(x, y)
+        local lx, ly = x:lower(), y:lower()
+        if lx == ly then return x < y end
+        return lx < ly
+    end)
+    table.insert(rest, 1, "template")
+    return rest
+end
+-- end preset block
+
 local ok, dt = pcall(require, "darktable")
 if not ok then return M end
 
@@ -856,11 +1077,6 @@ if dt.gui then
         "Assisted Grouping: plugin folder",
         "The darktable-assisted-grouping folder (holds python/ and .venv). Empty = auto-detect",
         "")
-    -- A string, not an integer like the sibling plugins' gap: decimals are allowed.
-    dt.preferences.register("assisted_grouping", "burst_gap_seconds", "string",
-        "Assisted Grouping: burst gap (seconds)",
-        "Photos taken closer together than this are one burst. Decimals are allowed (e.g. 0.5 or 1,5); the default is 2",
-        "2")
 end
 
 M.tags_of = function(img)
@@ -1524,6 +1740,318 @@ function M.clear_marks(images)
     run_next()
 end
 
+-- Preset controls: drift-guarded copy in grouping, culling and tagging. Change all three.
+-- The preset picker and ☰ menu at the top of the panel. Lua panels can't use darktable's
+-- own presets (lualib.c leaves get_params/set_params NULL), so this builds its own.
+-- Combobox callbacks run later and fire on every `selected` assignment, so each one acts
+-- only when the widget's value differs from `current`.
+
+local PRESET_WHY = {
+    empty = "type a name first",
+    reserved = '"template" is the built-in preset',
+    ["bad character"] = 'a name can\'t hold / \\ : * ? " < > |',
+}
+
+-- Presets as <dir>/<name>.json. The folder is made on first use.
+local function preset_file_store(dir)
+    local windows = dt.configuration.running_os == "windows"
+    local function quote(s)
+        if windows then return '"' .. s:gsub("/", "\\") .. '"' end
+        return "'" .. s:gsub("'", "'\\''") .. "'"
+    end
+    os.execute((windows and "mkdir " or "mkdir -p ") .. quote(dir) .. (windows and " 2>nul" or " 2>/dev/null"))
+    local store = {}
+    function store.path(name) return dir .. "/" .. name .. ".json" end
+    function store.list()
+        local names = {}
+        local p = io.popen(windows and ("dir /b " .. quote(dir .. "/*.json") .. " 2>nul")
+            or ("ls -1 " .. quote(dir) .. " 2>/dev/null"))
+        if not p then return names end
+        for line in p:lines() do
+            local name = line:gsub("\r$", ""):match("^(.+)%.json$")
+            if name then names[#names + 1] = name end
+        end
+        p:close()
+        return names
+    end
+    function store.read(name)
+        local f = io.open(store.path(name), "rb")
+        if not f then return nil end
+        local text = f:read("a")
+        f:close()
+        return text
+    end
+    -- Write a .tmp, then swap it in (Windows can't rename over an existing file).
+    function store.write(name, text)
+        local path = store.path(name)
+        local f = io.open(path .. ".tmp", "wb")
+        if not f then return false end
+        local ok = f:write(text)
+        f:close()
+        if not ok then os.remove(path .. ".tmp"); return false end
+        os.remove(path)
+        return os.rename(path .. ".tmp", path) and true or false
+    end
+    function store.rename(old, new)
+        local ok, err = os.rename(store.path(old), store.path(new))
+        return ok and true or false, err
+    end
+    function store.remove(name)
+        local ok, err = os.remove(store.path(name))
+        return ok and true or false, err
+    end
+    return store
+end
+
+-- o = { prefix, schema, store, read_panel = fn() -> settings | nil, why,
+--       show = fn(settings), remember = fn(name), initial = name, log = fn(msg),
+--       on_change = fn(name, is_template) | nil, can_switch = fn() -> ok, why | nil,
+--       allow_store_new = bool }
+-- Returns ctl: ctl.widget (the box to put first in the panel), ctl.widgets, ctl.select(name),
+-- ctl.refresh(), ctl.check_dirty(), ctl.name(), ctl.saved (settings last loaded or saved).
+local function make_preset_controls(o)
+    local ctl = { widgets = {} }
+    local names, current, menu_actions = { "template" }, nil, {}
+    local name_mode
+    local picker, menu, name_entry, name_box, confirm_label, confirm_box, dirty_label
+
+    local function say(msg) dt.print(o.prefix .. ": " .. msg) end
+
+    local function index_of(name)
+        for i, n in ipairs(names) do
+            if n == name then return i end
+        end
+    end
+
+    local function set_entries(combo, items)
+        for i = #combo, 1, -1 do combo[i] = nil end
+        for i, text in ipairs(items) do combo[i] = text end
+    end
+
+    local function show_picker(name)
+        local i = index_of(name)
+        if i and picker.selected ~= i then picker.selected = i end
+    end
+
+    -- Loads `name` into the panel. False (values untouched) when the file can't be used.
+    local function load(name)
+        local settings
+        if name == "template" then
+            settings = M.preset_defaults(o.schema)
+        else
+            local text = o.store.read(name)
+            local decoded, err
+            if text then decoded, err = M.preset_decode(text) else err = "can't be read" end
+            if not decoded then
+                local msg = string.format('preset "%s": %s %s, panel unchanged', name, o.store.path(name), err)
+                o.log(msg)
+                say(msg)
+                return false
+            end
+            local problems
+            settings, problems = M.preset_merge(o.schema, decoded)
+            for _, key in ipairs(problems) do
+                o.log(string.format('preset "%s": %s invalid, using default', name, key))
+            end
+            if #problems > 0 then
+                say(string.format('preset "%s": %d invalid value(s) set to the default (see the log)', name, #problems))
+            end
+        end
+        ctl.saved = settings
+        o.show(settings)
+        return true
+    end
+
+    local function hide_boxes()
+        name_box.visible = false
+        confirm_box.visible = false
+    end
+
+    local function ask_name(mode)
+        name_mode = mode
+        name_entry.text = mode == "rename" and current or ""
+        confirm_box.visible = false
+        name_box.visible = true
+    end
+
+    local function update()
+        local settings, why = o.read_panel()
+        if not settings then say(why); return end
+        if not o.store.write(current, M.preset_encode(o.schema, settings)) then
+            say("couldn't write " .. o.store.path(current))
+            return
+        end
+        ctl.saved = settings
+        say(string.format('preset "%s" updated', current))
+        ctl.check_dirty()
+    end
+
+    local function ask_delete()
+        confirm_label.label = string.format('Delete preset "%s"?', current)
+        name_box.visible = false
+        confirm_box.visible = true
+    end
+
+    local function set_menu()
+        local items = { "☰" }
+        menu_actions = { false }
+        local function add(text, action)
+            items[#items + 1] = text
+            menu_actions[#menu_actions + 1] = action
+        end
+        if current ~= "template" then add(string.format('update preset "%s"', current), update) end
+        if o.allow_store_new then add("store new preset…", function() ask_name("store") end) end
+        if current ~= "template" then
+            add("rename preset…", function() ask_name("rename") end)
+            add("delete preset", ask_delete)
+        end
+        set_entries(menu, items)
+        menu.selected = 1
+    end
+
+    function ctl.name() return current end
+
+    -- "unsaved changes" when the panel differs from the file. Template has no file.
+    function ctl.check_dirty()
+        local dirty = false
+        if current ~= "template" and ctl.saved then
+            local settings = o.read_panel()
+            dirty = not settings or not M.preset_equal(o.schema, settings, ctl.saved)
+        end
+        dirty_label.visible = dirty
+        return dirty
+    end
+
+    function ctl.select(name)
+        if name ~= "template" and not index_of(name) then name = "template" end
+        if current and o.can_switch then
+            local ok, why = o.can_switch()
+            if not ok then say(why); show_picker(current); return false end
+        end
+        if not load(name) then
+            if current then show_picker(current) else ctl.select("template") end
+            return false
+        end
+        current = name
+        show_picker(name)
+        o.remember(name)
+        hide_boxes()
+        set_menu()
+        if o.on_change then o.on_change(name, name == "template") end
+        ctl.check_dirty()
+        return true
+    end
+
+    -- Rereads the preset list. A selected preset that has gone falls back to template.
+    function ctl.refresh()
+        names = M.preset_order(o.store.list())
+        set_entries(picker, names)
+        if current and not index_of(current) then
+            current = nil
+            ctl.select("template")
+        elseif current then
+            show_picker(current)
+        end
+    end
+
+    local function name_taken(name)
+        for _, n in ipairs(o.store.list()) do
+            if n:lower() == name:lower() and not (name_mode == "rename" and n == current) then return true end
+        end
+        return false
+    end
+
+    local function name_ok_clicked()
+        local name, why = M.preset_name_ok(name_entry.text)
+        if not name then say("preset name: " .. PRESET_WHY[why]); return end
+        if name_taken(name) then say(string.format('a preset called "%s" already exists', name)); return end
+        if name_mode == "store" then
+            local settings, bad = o.read_panel()
+            if not settings then say(bad); return end
+            if not o.store.write(name, M.preset_encode(o.schema, settings)) then
+                say("couldn't write " .. o.store.path(name))
+                return
+            end
+            name_box.visible = false
+            ctl.refresh()
+            ctl.select(name)
+        else
+            local ok, err = o.store.rename(current, name)
+            if not ok then say(string.format('couldn\'t rename "%s": %s', current, tostring(err))); return end
+            name_box.visible = false
+            current = name
+            ctl.refresh()
+            o.remember(name)
+            set_menu()
+        end
+    end
+
+    local function delete_clicked()
+        local ok, err = o.store.remove(current)
+        if not ok then say(string.format('couldn\'t delete "%s": %s', current, tostring(err))); return end
+        confirm_box.visible = false
+        say(string.format('preset "%s" deleted', current))
+        ctl.refresh()
+    end
+
+    picker = dt.new_widget("combobox") {
+        label = "preset",
+        tooltip = "Pick a saved set of panel settings. template = the defaults. Unsaved changes are dropped when you switch. Save with ☰ → update preset.",
+        changed_callback = function(self)
+            local name = self.value
+            if current and name and name ~= "" and name ~= current then ctl.select(name) end
+        end,
+        "template",
+    }
+    menu = dt.new_widget("combobox") {
+        tooltip = "Preset actions: update the selected preset with the panel's values, store the panel as a new preset, rename or delete.",
+        changed_callback = function(self)
+            local i = self.selected
+            if not i or i <= 1 then return end
+            local action = menu_actions[i]
+            self.selected = 1
+            if action then ctl.check_dirty(); action() end
+        end,
+        "☰",
+    }
+    dirty_label = dt.new_widget("label") { label = "unsaved changes", halign = "start", visible = false }
+    name_entry = dt.new_widget("entry") { placeholder = "preset name", text = "" }
+    name_box = dt.new_widget("box") {
+        orientation = "vertical",
+        visible = false,
+        name_entry,
+        dt.new_widget("box") {
+            orientation = "horizontal",
+            dt.new_widget("button") { label = "OK", clicked_callback = name_ok_clicked },
+            dt.new_widget("button") { label = "Cancel", clicked_callback = function() name_box.visible = false end },
+        },
+    }
+    confirm_label = dt.new_widget("label") { label = "", halign = "start" }
+    confirm_box = dt.new_widget("box") {
+        orientation = "vertical",
+        visible = false,
+        confirm_label,
+        dt.new_widget("box") {
+            orientation = "horizontal",
+            dt.new_widget("button") { label = "Delete", clicked_callback = delete_clicked },
+            dt.new_widget("button") { label = "Cancel", clicked_callback = function() confirm_box.visible = false end },
+        },
+    }
+    ctl.widgets = { picker = picker, menu = menu, dirty_label = dirty_label, name_box = name_box, confirm_box = confirm_box }
+    ctl.widget = dt.new_widget("box") {
+        orientation = "vertical",
+        dt.new_widget("box") { orientation = "horizontal", picker, menu },
+        dirty_label,
+        name_box,
+        confirm_box,
+    }
+
+    ctl.refresh()
+    ctl.select(o.initial or "template")
+    return ctl
+end
+-- end preset controls
+
 -- Panel -----------------------------------------------------------------------
 
 -- dt.gui.action_images changes with the selection; queued jobs keep the images they were
@@ -1542,15 +2070,27 @@ local function install_panel()
     if M.module_installed then return end
     M.module_installed = true
 
+    local ctl
+    local function changed()
+        if ctl then ctl.check_dirty() end
+    end
+
     local timing_check = dt.new_widget("check_button") {
         label = "Burst timing",
-        tooltip = "Start a new group when the gap to the previous photo is longer than the burst gap (preferences → Lua options, default 2 seconds, decimals allowed).",
+        tooltip = "Start a new group when the gap to the previous photo is longer than the burst gap below.",
         value = true,
+        clicked_callback = changed,
+    }
+    local gap_entry = dt.new_widget("entry") {
+        tooltip = "Burst gap in seconds: photos taken closer together than this are one burst. Default: 2. Decimals are allowed (0.5 or 1,5). Lower it for fast bursts that should split; raise it when a burst has pauses.",
+        placeholder = "burst gap (seconds), e.g. 2",
+        text = "2",
     }
     local camera_check = dt.new_widget("check_button") {
         label = "Camera and lens",
         tooltip = "Divide each group by camera maker, model and lens.",
         value = false,
+        clicked_callback = changed,
     }
     local tag_entry = dt.new_widget("entry") {
         tooltip = "Divide each group into photos that carry exactly this tag and photos that don't (child tags don't count). Empty = off.",
@@ -1566,22 +2106,52 @@ local function install_panel()
         label = "Refine existing groups",
         tooltip = "Start from each photo's group tag from the latest earlier run instead of burst timing; photos without one are timed among themselves (or share one group when Burst timing is off). The other layers then divide as usual.",
         value = false,
+        clicked_callback = changed,
     }
     local native_check = dt.new_widget("check_button") {
         label = "Apply darktable groups",
         tooltip = "Default, quick output. Make one darktable group per final group of two or more photos. Photos already in a group you made by hand are skipped. Once this step starts, cancel is ignored so no group is left half-built.",
         value = true,
+        clicked_callback = changed,
     }
     local tags_check = dt.new_widget("check_button") {
         label = "Write group tags",
         tooltip = "Tag each photo under Assisted Grouping|<run time>|... with its group and each layer's result. Adds time on a large selection.",
         value = false,
+        clicked_callback = changed,
     }
 
+    local function read_panel()
+        local gap = M.parse_gap(gap_entry.text)
+        if not gap then return nil, M.ERR_BAD_GAP end
+        return {
+            burst_gap_seconds = gap,
+            timing = timing_check.value,
+            camera = camera_check.value,
+            tag = tag_entry.text,
+            parent = parent_entry.text,
+            refine = refine_check.value,
+            native_groups = native_check.value,
+            write_tags = tags_check.value,
+        }
+    end
+
+    local function show_panel(s)
+        gap_entry.text = string.format("%.14g", s.burst_gap_seconds)
+        timing_check.value = s.timing
+        camera_check.value = s.camera
+        tag_entry.text = s.tag
+        parent_entry.text = s.parent
+        refine_check.value = s.refine
+        native_check.value = s.native_groups
+        tags_check.value = s.write_tags
+    end
+
     local function read_options()
+        changed()
         return M.panel_options({
             timing = timing_check.value,
-            gap_text = dt.preferences.read("assisted_grouping", "burst_gap_seconds", "string"),
+            gap_text = gap_entry.text,
             camera = camera_check.value,
             tag = tag_entry.text,
             parent = parent_entry.text,
@@ -1619,10 +2189,24 @@ local function install_panel()
         end,
     }
 
+    ctl = make_preset_controls({
+        prefix = "Assisted Grouping",
+        schema = M.PRESET_SCHEMA,
+        store = preset_file_store(LEDGER_DIR .. "/presets"),
+        read_panel = read_panel,
+        show = show_panel,
+        remember = function(name) dt.preferences.write("assisted_grouping", "preset", "string", name) end,
+        initial = dt.preferences.read("assisted_grouping", "preset", "string"),
+        log = function(msg) log(msg); flush_log() end,
+        allow_store_new = true,
+    })
+
     local panel_box = dt.new_widget("box") {
         orientation = "vertical",
+        ctl.widget,
         dt.new_widget("section_label") { label = "layers" },
         timing_check,
+        gap_entry,
         camera_check,
         tag_entry,
         parent_entry,
