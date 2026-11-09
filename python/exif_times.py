@@ -7,8 +7,8 @@ or `#precision,whole` line. It is `whole` when any readable file lacked a sub-se
 
 Epochs use the core's constant-offset convention: the naive EXIF time is read as UTC, no DST.
 
-JPEG sub-seconds are tested. ARW support is unverified until the Windows probe of a real ARW is in:
-it uses whatever probe_subsec.read_subsec_fields returns and falls back to whole seconds.
+Times come from probe_subsec.read_subsec_fields: Pillow for JPEGs, exifread for RAW files such as
+ARW (confirmed on one Sony ZV-E10 file). A file with no sub-second value falls back to whole seconds.
 """
 
 import calendar

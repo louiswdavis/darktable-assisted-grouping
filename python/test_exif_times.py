@@ -1,6 +1,7 @@
 # Run with: python python/test_exif_times.py
 # Exercises exif_times.py on JPEGs written with Pillow into a temp dir.
 
+import calendar
 import csv
 import os
 import subprocess
@@ -12,6 +13,7 @@ from PIL import Image
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 import exif_times as E
+from test_probe_subsec import write_tiff_exif
 
 failures = 0
 
@@ -85,12 +87,33 @@ def run_tests():
         check("no subsec -> whole epoch", got, BASE)
         check("no subsec -> integral value", got is not None and float(got).is_integer(), True)
 
+        sub8a = os.path.join(tmp, "sub8a.jpg")
+        write_jpeg(sub8a, {DATE_TIME_ORIGINAL: "2026:06:01 14:30:00", SUBSEC_TIME_ORIGINAL: "8a"})
+        check("non-digit SubSec '8a' -> whole epoch", E.read_capture_epoch(sub8a), BASE)
+        check("non-digit SubSec '8a' -> CLI whole precision", run_cli(tmp, [["1", sub8a]]),
+              [["1", str(BASE)], ["#precision", "whole"]])
+
+        zero_date = os.path.join(tmp, "zero_date.jpg")
+        write_jpeg(zero_date, {DATE_TIME_ORIGINAL: "0000:00:00 00:00:00", SUBSEC_TIME_ORIGINAL: "47"})
+        check("DateTimeOriginal 0000:00:00 00:00:00 -> None", E.read_capture_epoch(zero_date), None)
+
         plain = os.path.join(tmp, "plain.jpg")
         write_jpeg(plain)
         check("no EXIF -> None", E.read_capture_epoch(plain), None)
 
         missing = os.path.join(tmp, "missing.jpg")
         check("missing file -> None", E.read_capture_epoch(missing), None)
+
+        raw = os.path.join(tmp, "raw.arw")
+        write_tiff_exif(raw)
+        raw_whole = calendar.timegm((2026, 11, 7, 14, 11, 44, 0, 0, 0))
+        check_close("synthetic ARW via exifread: SubSec '897' -> +0.897", E.read_capture_epoch(raw),
+                    raw_whole + 0.897)
+
+        junk = os.path.join(tmp, "junk.arw")
+        with open(junk, "wb") as f:
+            f.write(b"II*\x00garbage")
+        check("junk ARW -> None", E.read_capture_epoch(junk), None)
 
         odd_dir = os.path.join(tmp, 'a, "b"')
         os.makedirs(odd_dir)

@@ -188,7 +188,7 @@ local LEDGER_PATH = LEDGER_DIR .. "/ledger.csv"
 if dt.gui then
     dt.preferences.register("assisted_grouping", "python_bin", "file",
         "Assisted Grouping: Python interpreter",
-        "Python executable with Pillow installed (python/requirements.txt, e.g. .venv\\Scripts\\python.exe). Empty = auto-detect the repo's .venv",
+        "Python executable with Pillow and exifread installed (python/requirements.txt, e.g. .venv\\Scripts\\python.exe). Empty = auto-detect the repo's .venv",
         "")
     dt.preferences.register("assisted_grouping", "plugin_folder", "directory",
         "Assisted Grouping: plugin folder",
@@ -887,7 +887,7 @@ local function install_panel()
 
     local group_button = dt.new_widget("button") {
         label = "Group selection",
-        tooltip = "Group the selected photos by the layers above. Cancel from the progress bar; a cancelled run changes nothing, except once darktable groups have started.",
+        tooltip = "Group the selected photos by the layers above. Cancel from the progress bar: before anything is written it changes nothing, while tags are being written it stops partway (partial tags stay), and once darktable groups have started it is ignored.",
         clicked_callback = function()
             local opts, why = read_options()
             if not opts then
