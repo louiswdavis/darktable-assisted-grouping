@@ -605,9 +605,10 @@ local s2, t2 = A.run_stamp(1000, t1)
 check("run_stamp: same second steps forward", t2 == t1 + 1 and s2 > s1, true)
 check("run_stamp: later time used as is", select(2, A.run_stamp(2000, t2)), 2000)
 
-check("utf16le: ASCII", A.utf16le("A"), "A\0")
-check("utf16le: two-byte char", A.utf16le("é"), "\xE9\0")
-check("utf16le: astral char is a surrogate pair", A.utf16le("😀"), "\x3D\xD8\x00\xDE")
+check("pythonw_of: venv python.exe", A.pythonw_of("C:/x/.venv/Scripts/python.exe"), "C:/x/.venv/Scripts/pythonw.exe")
+check("pythonw_of: case-insensitive", A.pythonw_of("C:\\Py\\Python.EXE"), "C:\\Py\\pythonw.exe")
+check("pythonw_of: bare python on PATH", A.pythonw_of("python"), "pythonw")
+check("pythonw_of: other launcher is refused", A.pythonw_of("C:/Windows/py.exe"), nil)
 
 local tmp_path = os.tmpname()
 check("write_file_atomic: replaces an existing file", A.write_file_atomic(tmp_path, "one\n") and A.write_file_atomic(tmp_path, "two\n"), true)

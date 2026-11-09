@@ -226,20 +226,14 @@ function M.read_file_or_tmp(path)
     return nil
 end
 
--- UTF-8 → UTF-16LE (no BOM), for the .vbs launcher: wscript reads a script as
--- ANSI unless it's UTF-16, which garbles a non-ASCII tmp path.
-function M.utf16le(s)
-    local out = {}
-    for _, c in utf8.codes(s) do
-        if c >= 0x10000 then
-            c = c - 0x10000
-            local hi, lo = 0xD800 + (c >> 10), 0xDC00 + (c & 0x3FF)
-            out[#out + 1] = string.char(hi & 0xFF, hi >> 8, lo & 0xFF, lo >> 8)
-        else
-            out[#out + 1] = string.char(c & 0xFF, c >> 8)
-        end
-    end
-    return table.concat(out)
+-- python.exe → the pythonw.exe beside it (venvs and python.org installs ship both),
+-- which opens no console window. nil for any other name.
+function M.pythonw_of(py)
+    local dir, name = py:match("^(.-)([^/\\]*)$")
+    name = name:lower()
+    if name == "python.exe" then return dir .. "pythonw.exe" end
+    if name == "python" then return dir .. "pythonw" end
+    return nil
 end
 
 local ok, dt = pcall(require, "darktable")
@@ -414,34 +408,41 @@ local function python_bin(script)
     return v
 end
 
--- The exit code goes to a temp file renamed onto done_path, so done_path
--- never exists without its code in it. Returns false when it couldn't launch.
-local function run_async_command(cmd, done_path)
-    local done_tmp = done_path .. ".tmp"
+-- "py -u argv..." quoted for the shell: the log line, and the launch off Windows.
+local function command_line(py, argv)
+    local parts = { shell_quote(py), "-u" }
+    for _, a in ipairs(argv) do parts[#parts + 1] = shell_quote(a) end
+    return table.concat(parts, " ")
+end
+
+-- Starts `py -u argv...` without waiting, stderr to err_path (appended when `append`).
+-- The exit code goes to a temp file renamed onto done_path, so done_path never exists
+-- without its code in it. On Windows python/launch.py runs it under pythonw.exe: no
+-- console window, no script host, nothing executable written to tmp (antivirus
+-- behaviour checks flag a hidden .vbs/.bat chain). Returns false plus why it didn't start.
+local function run_async_python(py, argv, err_path, append, done_path)
     if IS_WINDOWS then
-        local bat_path, vbs_path = done_path .. ".bat", done_path .. ".vbs"
-        local f = io.open(bat_path, "w")
-        if not f then return false end
-        -- cmd.exe expands %…% in a .bat, so a literal % in a path is doubled.
-        local function bat_text(s) return (s:gsub("%%", "%%%%")) end
-        local win_done = bat_text((done_path:gsub("/", "\\")))
-        local win_tmp = bat_text((done_tmp:gsub("/", "\\")))
-        f:write("@echo off\r\nchcp 65001>nul\r\n")
-        f:write(bat_text(cmd), " < NUL\r\n")
-        -- redirect first: "echo 0> f" would redirect handle 0 and leave f empty
-        f:write('> "', win_tmp, '" echo %ERRORLEVEL%\r\n')
-        f:write('move /y "', win_tmp, '" "', win_done, '" >nul\r\n')
+        local pyw = M.pythonw_of(py)
+        if not pyw then return false, "the Python preference must point at a python.exe" end
+        if pyw:find("[/\\]") and not file_exists(pyw) then return false, pyw .. " is missing" end
+        local job = done_path .. ".job"
+        local f = io.open(job, "w")
+        if not f then return false, "no write access to darktable's tmp folder" end
+        f:write(done_path, "\n", err_path, "\n", append and "a" or "w", "\n", table.concat(argv, "\n"), "\n")
         f:close()
-        local f_vbs = io.open(vbs_path, "wb")
-        if not f_vbs then return false end
-        f_vbs:write("\xFF\xFE", M.utf16le('Set WshShell = CreateObject("WScript.Shell")\r\n'
-            .. 'WScript.Quit WshShell.Run(Chr(34) & "' .. bat_path:gsub("/", "\\") .. '" & Chr(34), 0, False)\r\n'))
-        f_vbs:close()
-        os.execute('wscript.exe "' .. vbs_path:gsub("/", "\\") .. '"')
-    else
-        os.execute('( ' .. cmd .. ' ; echo $? > ' .. shell_quote(done_tmp)
-            .. ' ; mv -f ' .. shell_quote(done_tmp) .. ' ' .. shell_quote(done_path) .. ' ) >/dev/null 2>&1 &')
+        local launcher = (argv[1]:match("^(.*)[/\\]") or ".") .. "/launch.py"
+        local ok = os.execute('start "" /B ' .. shell_quote((pyw:gsub("/", "\\")))
+            .. " " .. shell_quote((launcher:gsub("/", "\\"))) .. " " .. shell_quote((job:gsub("/", "\\"))))
+        if not ok then
+            pcall(os.remove, job)
+            return false, pyw .. " didn't start"
+        end
+        return true
     end
+    local done_tmp = done_path .. ".tmp"
+    os.execute('( ' .. command_line(py, argv) .. (append and " 2>> " or " 2> ") .. shell_quote(err_path)
+        .. ' ; echo $? > ' .. shell_quote(done_tmp)
+        .. ' ; mv -f ' .. shell_quote(done_tmp) .. ' ' .. shell_quote(done_path) .. ' ) >/dev/null 2>&1 &')
     return true
 end
 
@@ -462,10 +463,9 @@ local function new_run_paths()
         stderr = base .. "stderr.txt", done = base .. "done.txt" }
 end
 
--- Only once the helper has exited: cmd.exe reads a .bat as it runs.
+-- Only once the helper has exited: it still reads the manifest and writes its results.
 local function remove_run_files(p)
-    for _, f in ipairs({ p.manifest, p.results, p.stderr, p.done, p.done .. ".tmp",
-            p.done .. ".bat", p.done .. ".vbs" }) do
+    for _, f in ipairs({ p.manifest, p.results, p.stderr, p.done, p.done .. ".tmp", p.done .. ".job" }) do
         pcall(os.remove, f)
     end
 end
@@ -539,13 +539,12 @@ local function read_helper_times(units, job)
         return nil, "couldn't write the image list to darktable's tmp folder"
     end
     local script = helper_script()
-    local cmd = shell_quote(python_bin(script)) .. " -u " .. shell_quote(script) .. " "
-        .. shell_quote(p.manifest) .. " " .. shell_quote(p.results)
-        .. " 2> " .. shell_quote(p.stderr)
-    log(string.format("running (%d files): %s", #rows, cmd))
+    local py, argv = python_bin(script), { script, p.manifest, p.results }
+    log(string.format("running (%d files): %s", #rows, command_line(py, argv)))
     flush_log()
-    if not run_async_command(cmd, p.done) then
-        return nil, "couldn't start exif_times.py (no write access to darktable's tmp folder)"
+    local launched, why = run_async_python(py, argv, p.stderr, false, p.done)
+    if not launched then
+        return nil, "couldn't start exif_times.py: " .. why
     end
     local start = os.time()
     while true do
