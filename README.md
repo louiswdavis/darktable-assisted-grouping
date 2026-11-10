@@ -153,34 +153,42 @@ The **preset** picker at the top of the panel saves every panel setting (the lay
 
 ## Panel options
 
-Below the [preset](#presets) picker the panel has two sections. Layers run in a fixed order, and each one only divides the groups the one before produced; none merges.
+Below the [preset](#presets) picker the panel runs top to bottom in the order you'd check it: **1 start groups**, **2 divide groups**, **3 output**, **4 run**, then **tools**. Click a section's header to fold it; a folded header shows a short summary of its settings in brackets, e.g. `2 ▸ divide groups (1 of 3 on)`. **tools** starts folded. darktable's reset button (↺ in the panel header) puts every setting back to the template defaults; nothing is saved until you update a preset.
 
-### layers
+Layers run in a fixed order, and each one only divides the groups the one before produced; none merges.
+
+### 1 start groups
 
 - **Burst timing** (on by default). Sorts the frames by capture time and starts a new group when the gap to the previous frame is longer than the burst gap. A frame with no capture time is a group of its own, never merged and never dropped. Off: every frame starts in one shared group, and only the layers below divide it.
 - **burst gap (seconds)** (text field, default `2`). Frames closer together than this are one burst. Decimals allowed, with a point or a comma (`0.5`, `1,5`). Must be above 0, or the run refuses.
+- **Refine existing groups.** Starts from the latest earlier run's group tags instead of timing (see [Re-running and clearing](#re-running-and-clearing)).
+
+### 2 divide groups
+
 - **Camera and lens.** Divides each group by camera maker, model and lens, so two bodies or two lenses shooting the same moment end up apart.
 - **Tag** (text field, e.g. `Cars|Red`). Divides each group into photos that carry exactly this tag and photos that don't. Child tags don't count. Empty = off.
 - **Parent tag** (text field, e.g. `Cars|Number`). Divides each group by which tag directly under this node a photo carries. A photo with no child under the node, or several, isn't split off by this layer: it stays with the group's first part. The log counts these photos.
-- **Refine existing groups.** Starts from the latest earlier run's group tags instead of timing (see [Re-running and clearing](#re-running-and-clearing)).
 
 At least one layer (or Refine) must be on, or the run refuses: "turn on at least one layer (burst timing, camera and lens, tag or parent tag), or Refine existing groups".
 
 Separate bursts are never linked by the tag layers. One car tagged in bursts 3, 9 and 20 gives three groups: at a rally the cars loop past many times, and merging by tag would pull unrelated passes together.
 
-### output
+### 3 output
 
 - **Apply darktable groups** (on by default). One darktable group per final group of two or more photos. Photos already in a darktable group you made by hand are skipped, left in that group, and counted in the log. With only this output on, the layers are flattened into the final grouping, because a photo can only be in one darktable group.
 - **Write group tags** (off by default; slower on large selections). The tags in [What you get](#what-you-get). Needed for Refine existing groups and for anything that reads the tags.
 
 At least one output must be on, or the run refuses: "turn on at least one output (group tags or darktable groups)". Each output is only changed when it's on: a run with darktable groups off leaves the plugin's earlier darktable groups as they are, and a run with tags off leaves its earlier tags.
 
-### Buttons
+### 4 run
 
-- **Group selection.** Runs the layers on the selected photos.
+- **Group selection.** Runs the layers on the selected photos. The partial-burst warning sits under it.
+
+### tools
+
 - **Clear grouping marks.** Removes the plugin's tags and darktable groups from the selected photos (see [Re-running and clearing](#re-running-and-clearing)).
 
-Everything in **layers** and **output** is saved with the [preset](#presets).
+Everything in sections 1 to 3 is saved with the [preset](#presets).
 
 ## Preferences
 
@@ -256,7 +264,7 @@ The darktable side has never run: it was written without darktable to test again
 **Setup**
 
 1. **Install Python.** In the repo folder: `python -m venv .venv`, then `.venv\Scripts\pip install -r python\requirements.txt`. *Expect:* Pillow and exifread install with no errors.
-2. **Install the plugin** as in [Install](#2-darktable-side), linking **both** Lua files, and start darktable. *Expect:* an **Assisted Grouping** panel on the right in lighttable, with sections *layers* and *output* and the partial-burst warning. No `LUA ERROR` in the darktable log.
+2. **Install the plugin** as in [Install](#2-darktable-side), linking **both** Lua files, and start darktable. *Expect:* an **Assisted Grouping** panel on the right in lighttable, with sections *1 start groups*, *2 divide groups*, *3 output* and *4 run* (with the partial-burst warning), and a folded *tools* section. No `LUA ERROR` in the darktable log.
 3. **Set the plugin folder** in **preferences → lua options → Assisted Grouping: plugin folder** to the repo folder. *Expect:* the preference is saved; the panel's burst gap shows `2` on `template`.
 
 **First run (tags only)**

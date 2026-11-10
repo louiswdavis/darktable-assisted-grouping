@@ -2079,6 +2079,39 @@ local function make_preset_controls(o)
 end
 -- end preset controls
 
+-- Section block: drift-guarded copy in grouping, culling and tagging. Change all three.
+-- A collapsible panel section: the header button toggles the body box. While collapsed
+-- the header shows o.summary() in brackets, so its settings can be checked unopened.
+-- visible = false also stops darktable's show-all from unhiding a collapsed body.
+local function make_section(o)
+    local s = { open = o.open ~= false }
+    local body = { orientation = "vertical" }
+    for i = 1, #o.widgets do body[#body + 1] = o.widgets[i] end
+    s.body = dt.new_widget("box")(body)
+    s.header = dt.new_widget("button") { label = o.title }
+    function s.refresh()
+        local text = (o.number and (o.number .. "  ") or "") .. (s.open and "▾ " or "▸ ") .. o.title
+        local extra = (not s.open and o.summary) and o.summary() or ""
+        if extra ~= "" then text = text .. "  (" .. extra .. ")" end
+        s.header.label = text
+    end
+    s.header.clicked_callback = function()
+        s.open = not s.open
+        s.body.visible = s.open
+        s.refresh()
+    end
+    s.body.visible = s.open
+    s.refresh()
+    s.widget = dt.new_widget("box") { orientation = "vertical", s.header, s.body }
+    return s
+end
+
+-- Plain numbered heading for a section that never collapses (the run step).
+local function step_label(number, title)
+    return dt.new_widget("section_label") { label = number .. "  " .. title }
+end
+-- end section block
+
 -- Panel -----------------------------------------------------------------------
 
 -- dt.gui.action_images changes with the selection; queued jobs keep the images they were
@@ -2098,8 +2131,13 @@ local function install_panel()
     M.module_installed = true
 
     local ctl
+    local sections = {}
+    local function refresh_sections()
+        for i = 1, #sections do sections[i].refresh() end
+    end
     local function changed()
         if ctl then ctl.check_dirty() end
+        refresh_sections()
     end
 
     local timing_check = dt.new_widget("check_button") {
@@ -2172,6 +2210,7 @@ local function install_panel()
         refine_check.value = s.refine
         native_check.value = s.native_groups
         tags_check.value = s.write_tags
+        refresh_sections()
     end
 
     local function read_options()
@@ -2228,22 +2267,55 @@ local function install_panel()
         allow_store_new = true,
     })
 
+    local function on_text(e) return e.text ~= "" and 1 or 0 end
+    local start_section = make_section {
+        number = 1, title = "start groups",
+        widgets = { timing_check, gap_entry, refine_check },
+        summary = function()
+            local parts = {}
+            if timing_check.value then parts[#parts + 1] = "gap " .. gap_entry.text .. " s" end
+            if refine_check.value then parts[#parts + 1] = "refine" end
+            return #parts > 0 and table.concat(parts, ", ") or "one group"
+        end,
+    }
+    local divide_section = make_section {
+        number = 2, title = "divide groups",
+        widgets = { camera_check, tag_entry, parent_entry },
+        summary = function()
+            local on = (camera_check.value and 1 or 0) + on_text(tag_entry) + on_text(parent_entry)
+            return on .. " of 3 on"
+        end,
+    }
+    local output_section = make_section {
+        number = 3, title = "output",
+        widgets = { native_check, tags_check },
+        summary = function()
+            local parts = {}
+            if native_check.value then parts[#parts + 1] = "darktable groups" end
+            if tags_check.value then parts[#parts + 1] = "tags" end
+            return #parts > 0 and table.concat(parts, ", ") or "nothing"
+        end,
+    }
+    local tools_section = make_section {
+        title = "tools", open = false,
+        widgets = { clear_button },
+    }
+    sections = { start_section, divide_section, output_section, tools_section }
+
     local panel_box = dt.new_widget("box") {
         orientation = "vertical",
+        reset_callback = function()
+            show_panel(M.preset_defaults(M.PRESET_SCHEMA))
+            changed()
+        end,
         ctl.widget,
-        dt.new_widget("section_label") { label = "layers" },
-        timing_check,
-        gap_entry,
-        camera_check,
-        tag_entry,
-        parent_entry,
-        refine_check,
-        dt.new_widget("section_label") { label = "output" },
-        native_check,
-        tags_check,
+        start_section.widget,
+        divide_section.widget,
+        output_section.widget,
+        step_label(4, "run"),
         group_button,
         warning_label,
-        clear_button,
+        tools_section.widget,
     }
 
     dt.register_lib(
