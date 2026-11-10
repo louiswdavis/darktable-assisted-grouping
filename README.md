@@ -153,7 +153,7 @@ The **preset** picker at the top of the panel saves every panel setting (the lay
 
 ## Panel options
 
-Below the [preset](#presets) picker the panel runs top to bottom in the order you'd check it: **1 start groups**, **2 divide groups**, **3 output**, **4 run**, then **tools**. Click a section's header to fold it; a folded header shows a short summary of its settings in brackets, e.g. `2 ▸ divide groups (1 of 3 on)`. **tools** starts folded. darktable's reset button (↺ in the panel header) puts every setting back to the template defaults; nothing is saved until you update a preset.
+Below the [preset](#presets) picker the panel runs top to bottom in the order you'd check it: **1 start groups**, **2 divide groups**, **3 output**, **4 run**, then **tools**. Each section has its own heading; all sections stay open. darktable's reset button (↺ in the panel header) puts every setting back to the template defaults; nothing is saved until you update a preset.
 
 Layers run in a fixed order, and each one only divides the groups the one before produced; none merges.
 
@@ -264,7 +264,7 @@ The darktable side has never run: it was written without darktable to test again
 **Setup**
 
 1. **Install Python.** In the repo folder: `python -m venv .venv`, then `.venv\Scripts\pip install -r python\requirements.txt`. *Expect:* Pillow and exifread install with no errors.
-2. **Install the plugin** as in [Install](#2-darktable-side), linking **both** Lua files, and start darktable. *Expect:* an **Assisted Grouping** panel on the right in lighttable, with sections *1 start groups*, *2 divide groups*, *3 output* and *4 run* (with the partial-burst warning), and a folded *tools* section. No `LUA ERROR` in the darktable log.
+2. **Install the plugin** as in [Install](#2-darktable-side), linking **both** Lua files, and start darktable. *Expect:* an **Assisted Grouping** panel on the right in lighttable, with sections *1 start groups*, *2 divide groups*, *3 output* and *4 run* (with the partial-burst warning) and *tools*, each under its own heading. No `LUA ERROR` in the darktable log.
 3. **Set the plugin folder** in **preferences → lua options → Assisted Grouping: plugin folder** to the repo folder. *Expect:* the preference is saved; the panel's burst gap shows `2` on `template`.
 
 **First run (tags only)**
