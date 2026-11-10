@@ -2249,7 +2249,12 @@ local function install_panel()
             changed()
         end,
         ctl.widget,
-        make_section(1, "start groups", { timing_check, gap_entry, refine_check }),
+        make_section(1, "start groups", {
+            timing_check,
+            dt.new_widget("label") { label = "burst gap (seconds)", halign = "start" },
+            gap_entry,
+            refine_check,
+        }),
         make_section(2, "divide groups", { camera_check, tag_entry, parent_entry }),
         make_section(3, "output", { native_check, tags_check }),
         step_label(4, "run"),
