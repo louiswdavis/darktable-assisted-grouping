@@ -15,6 +15,41 @@ local function check(name, got, want)
     end
 end
 
+-- plugin_common.lua ---------------------------------------------------------------
+-- The same file in all three plugin repos; COMMON_HASH pins it. After changing it, copy it to the
+-- other two repos and put the hash this prints into their tests too.
+local COMMON_HASH = "de05b21b"
+local PC = dofile(script_dir .. "/plugin_common.lua")
+local function fnv1a(text)
+    local h = 2166136261
+    for i = 1, #text do h = ((h ~ text:byte(i)) * 16777619) & 0xffffffff end
+    return string.format("%08x", h)
+end
+local cf = assert(io.open(script_dir .. "/plugin_common.lua", "rb"))
+local common_text = cf:read("a"):gsub("\r\n", "\n")
+cf:close()
+check("plugin_common.lua matches COMMON_HASH (copy it to the other repos after a change)", fnv1a(common_text), COMMON_HASH)
+check("shell_quote: Windows escapes quotes and doubles %", PC.shell_quote('C:\\x %y% "z"', true), '"C:\\x %%y%% \\"z\\""')
+check("shell_quote: POSIX escapes single quotes", PC.shell_quote("a'b", false), "'a'\\''b'")
+check("parse_csv_line: quoted comma and doubled quote", PC.parse_csv_line('1,"a ""x"", b.jpg",3\r', 3)[2], 'a "x", b.jpg')
+check("parse_csv_line: wrong field count is nil", PC.parse_csv_line("a,b", 3), nil)
+check("lead_rank: full-size JPEG beats RAW", PC.lead_rank("x.JPG") > PC.lead_rank("x.nef"), true)
+do -- temp_base / sweep_temp: leftovers older than max_age go, newer ones and other prefixes stay
+    local dir = os.tmpname()
+    os.remove(dir)
+    os.execute(PC.IS_WINDOWS and ('mkdir "' .. dir .. '"') or ("mkdir -p '" .. dir .. "'"))
+    local function touch(name) local f = assert(io.open(dir .. "/" .. name, "w")); f:write("x"); f:close() end
+    touch("dt_assisted_x_1000_1_old.csv"); touch("dt_assisted_x_5000_1_new.csv"); touch("dt_assisted_y_1000_1_other.csv")
+    local base = PC.temp_base(dir, "dt_assisted_x_")
+    check("temp_base: <dir>/<prefix><epoch>_<seq>_", base:match("^" .. dir:gsub("%p", "%%%0") .. "/dt_assisted_x_%d+_%d+_$") ~= nil, true)
+    local removed = PC.sweep_temp(dir, "dt_assisted_x_", 86400, 1000 + 86401)
+    check("sweep_temp: removes only this prefix's stale files", table.concat(removed, ","), "dt_assisted_x_1000_1_old.csv")
+    check("sweep_temp: newer file kept", PC.file_exists(dir .. "/dt_assisted_x_5000_1_new.csv"), true)
+    check("sweep_temp: other prefix kept", PC.file_exists(dir .. "/dt_assisted_y_1000_1_other.csv"), true)
+    for _, n in ipairs(PC.list_dir(dir)) do os.remove(dir .. "/" .. n) end
+    os.remove(dir)
+end
+
 local function keys(set)
     local out = {}
     for k in pairs(set) do out[#out + 1] = k end
@@ -292,8 +327,29 @@ check("ledger round trip keeps the native leader", parsed[5] and parsed[5].nativ
 check("ledger round trip: no native means nil", parsed[3] and parsed[3].native, nil)
 check("ledger round trip keeps tag sets", parsed[5] and keys(parsed[5].tags), keys({ [odd] = true, [newer] = true }))
 check("ledger_format is stable", A.ledger_format(parsed), ledger_text)
-check("ledger_format quotes every field", ledger_text:match('^"3","tag","') ~= nil, true)
-check("ledger_parse of empty text", next(A.ledger_parse("")), nil)
+check("ledger_format quotes every field", ledger_text:match('^"","3","tag","') ~= nil, true)
+check("ledger_parse of empty text", next(A.ledger_parse(""), "other") or #A.ledger_parse("").other, 0)
+do -- library column: rows of other libraries pass through, 3-field rows belong to the current library
+    local mixed = A.ledger_format({ [7] = { tags = { ["AG|x"] = true }, native = 7 } }, "libA")
+    check("ledger_format writes the library key first", mixed:match('^"libA","7","tag","AG|x"\n') ~= nil, true)
+    local old_rows = '"9","tag","AG|old"\n"9","group","9"\n'
+    local l = A.ledger_parse(mixed .. old_rows, "libB")
+    check("ledger_parse: another library's rows aren't ours", l[7], nil)
+    check("ledger_parse: rows without a library column are ours", l[9] and l[9].tags["AG|old"] and l[9].native, 9)
+    check("ledger_parse: the other library's rows are kept", #l.other, 2)
+    local back = A.ledger_format(l, "libB")
+    check("ledger_format: ours first, the other library's rows after",
+        back, '"libB","9","tag","AG|old"\n"libB","9","group","9"\n"libA","7","tag","AG|x"\n"libA","7","group","7"\n')
+    check("ledger_format of an unchanged file is stable", A.ledger_format(A.ledger_parse(back, "libB"), "libB"), back)
+    local pruned, skipped = A.ledger_prune(l, function(id) return id == 9 end)
+    check("ledger_prune keeps the image that exists", pruned .. "," .. tostring(skipped) .. "," .. tostring(l[9] ~= nil), "0,false,true")
+    l[10] = { tags = { ["AG|gone"] = true } }
+    pruned = A.ledger_prune(l, function(id) return id == 9 end)
+    check("ledger_prune drops an image that's gone", pruned .. "," .. tostring(l[10]), "1,nil")
+    pruned, skipped = A.ledger_prune(l, function() return false end)
+    check("ledger_prune: nothing resolving means the lookup failed, not every image gone",
+        pruned .. "," .. tostring(skipped) .. "," .. tostring(l[9] ~= nil), "0,true,true")
+end
 
 -- plan_replace -----------------------------------------------------------------
 local add, remove = A.plan_replace(

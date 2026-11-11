@@ -52,7 +52,7 @@ python3 -m venv .venv
 
 darktable's config directory is `~/.config/darktable` on Linux/macOS and `%LOCALAPPDATA%\darktable` on Windows. Link the plugin into it and load it from `luarc`.
 
-The plugin is one Lua file, `lua/assisted_grouping.lua`.
+The plugin is `lua/assisted_grouping.lua` plus `lua/plugin_common.lua`, the module the three Assisted plugins share. A link into the repo finds the module beside the plugin by itself.
 
 Linux / macOS:
 
@@ -78,7 +78,7 @@ New-Item -ItemType SymbolicLink -Path "$env:LOCALAPPDATA\darktable\lua\contrib\a
 Add-Content "$env:LOCALAPPDATA\darktable\luarc" 'require "contrib/assisted_grouping"'
 ```
 
-Windows without Administrator rights or Developer Mode: copy `assisted_grouping.lua` into `%LOCALAPPDATA%\darktable\lua\contrib` instead of linking it, and add the same `luarc` line. Re-copy it after every update. The **plugin folder** preference (next step) still points the plugin at this repo for the Python side.
+Windows without Administrator rights or Developer Mode: copy `assisted_grouping.lua` into `%LOCALAPPDATA%\darktable\lua\contrib` instead of linking it, and add the same `luarc` line. Re-copy it after every update. The **plugin folder** preference (next step) still points the plugin at this repo for the Python side, and the plugin loads `plugin_common.lua` from that folder's `lua/` when the module is not beside the copied file (copy it too if you want darktable to start with the preference unset; the three plugins' copies are identical, so one copy in `contrib` serves all of them).
 
 ### 3. Point the plugin at the repo
 
@@ -129,7 +129,7 @@ A RAW and a JPEG with the same folder and filename stem (extension and case igno
 
 ### The ledger
 
-The plugin records what it made in `assisted_grouping/ledger.csv` in darktable's config directory (`%LOCALAPPDATA%\darktable\assisted_grouping\ledger.csv` on Windows). Rows are `id,tag,<tag name>` for each tag it attached and `id,group,<leader id>` for each image it put in a darktable group. Anything not in the ledger is yours. A plugin tag you removed by hand drops out of the ledger the next time a run writes tags on that image. Deleting the file makes every existing `Assisted Grouping` tag and group look hand-made: re-runs and Clear then leave them alone.
+The plugin records what it made in `assisted_grouping/ledger.csv` in darktable's config directory (`%LOCALAPPDATA%\darktable\assisted_grouping\ledger.csv` on Windows). Rows are `<library>,id,tag,<tag name>` for each tag it attached and `<library>,id,group,<leader id>` for each image it put in a darktable group. `<library>` is a hash of the library file's path (image ids restart in every library, so each library's rows are kept apart; rows from before this column belong to the library in use when they're first read). Anything not in the ledger is yours. A plugin tag you removed by hand drops out of the ledger the next time a run writes tags on that image, and rows for images removed from the library are dropped whenever the ledger is saved. A failed save is tried once more before the on-screen error. Deleting the file makes every existing `Assisted Grouping` tag and group look hand-made: re-runs and Clear then leave them alone. A library opened with `--library` on the command line is not visible to the plugin and counts as the configured one.
 
 ### Cancel
 
