@@ -26,9 +26,9 @@ Caches keep detections, OCR, embeddings and sharpness per frame, so a re-run is 
 
 **Reset to RAW+JPEG pairs** in grouping and darktable's own grouping toggle both break native groups. Tags survive both. Three settings:
 
-- Grouping preset: **Write group tags** on.
+- Grouping: **Write group tags** on; save as your rally preset in the grouping panel.
 - Tagging collection: **grouping support** = Grouping tags, node blank (newest run).
-- Culling preset: **grouping support** = Grouping tags, node blank; **car tag node** = the collection prefix.
+- Culling: **grouping support** = Grouping tags, node blank; **car tag node** = the collection prefix; save as your rally preset in the culling panel. The car tag node splits per car for number-only entries and per team for `team|name` entries, until ticket 15.
 
 Native groups stay the template default for other shoot types.
 
