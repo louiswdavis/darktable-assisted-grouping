@@ -24,7 +24,7 @@ Caches keep detections, OCR, embeddings and sharpness per frame, so a re-run is 
 
 ## Rally setup: groups travel as tags
 
-**Reset to RAW+JPEG pairs** in grouping and darktable's own grouping toggle both break native groups. Tags survive both. Three settings:
+**browse as pairs** in grouping and darktable's own grouping toggle both break native groups. Tags survive both, and **browse as bursts** restores the groups from the tags without Python. Three settings:
 
 - Grouping: **Write group tags** on; save as your rally preset in the grouping panel.
 - Tagging collection: **grouping support** = Grouping tags, node blank (newest run).

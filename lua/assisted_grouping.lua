@@ -238,8 +238,16 @@ local function one_group(units)
     return group_of
 end
 
-local function burst_layer(units, gap, base_of, timing)
-    local cluster = timing and function(list) return M.cluster_by_time(list, gap) end or one_group
+-- Every unit gets a group of its own, numbered in unit order.
+local function each_alone(units)
+    local group_of = {}
+    for i, unit in ipairs(units) do group_of[unit.id] = i end
+    return group_of
+end
+
+local function burst_layer(units, gap, base_of, timing, alone)
+    local cluster = alone and each_alone
+        or timing and function(list) return M.cluster_by_time(list, gap) end or one_group
     if not base_of then return cluster(units) end
     local burst_of, rest, max_base = {}, {}, 0
     for _, unit in ipairs(units) do
@@ -258,11 +266,12 @@ local function burst_layer(units, gap, base_of, timing)
 end
 
 -- opts = { gap, timing = bool (default true), camera = bool, tag = string|nil,
--- parent = string|nil, base_of = group_of|nil }. With timing false, burst_of is
--- base_of plus one group for the rest, and result.timing is false.
+-- parent = string|nil, base_of = group_of|nil, alone = bool }. With timing false,
+-- burst_of is base_of plus one group for the rest, and result.timing is false. With
+-- alone, each unit outside base_of gets its own group and result.timing is false.
 function M.run_layers(units, opts)
-    local result = { timing = opts.timing ~= false }
-    result.burst_of = burst_layer(units, opts.gap, opts.base_of, result.timing)
+    local result = { timing = opts.timing ~= false and not opts.alone }
+    result.burst_of = burst_layer(units, opts.gap, opts.base_of, result.timing, opts.alone)
     result.final_of = result.burst_of
     if opts.camera then
         result.camera_of = M.divide(result.final_of, M.camera_key, units)
@@ -342,7 +351,7 @@ function M.latest_group_tag(have)
     return best
 end
 
--- Units with no group tag are left out, so run_layers times them afresh.
+-- Units with no group tag are left out of the result.
 function M.base_of_from_tags(units)
     local group_of, number_of, next_group = {}, {}, 0
     for _, unit in ipairs(units) do
@@ -556,52 +565,93 @@ end
 M.ERR_NO_OUTPUT = "turn on at least one output (group tags or darktable groups)"
 M.ERR_BAD_GAP = "the burst gap must be a number of seconds above 0, e.g. 2 or 0.5"
 
+-- Stored start_from values (combobox order) and their panel labels.
+M.START_FROM = { "time", "tags", "one" }
+M.START_FROM_LABELS = { "capture time", "last run's groups", "one group" }
+
 -- Every panel setting a preset stores, in panel order.
 M.PRESET_SCHEMA = {
+    { key = "start_from", kind = "choice", choices = M.START_FROM, default = "time" },
     { key = "burst_gap_seconds", kind = "number", default = 2 },
-    { key = "timing", kind = "bool", default = true },
     { key = "camera", kind = "bool", default = false },
     { key = "tag", kind = "string", default = "" },
     { key = "parent", kind = "string", default = "" },
-    { key = "refine", kind = "bool", default = false },
     { key = "native_groups", kind = "bool", default = true },
     { key = "write_tags", kind = "bool", default = false },
 }
 
 -- The panel's pages and the preset keys each page's widgets edit (C.page_coverage checks them).
 M.PANEL_PAGES = {
-    { number = 1, title = "start groups", keys = { "timing", "burst_gap_seconds", "refine" } },
+    { number = 1, title = "start groups", keys = { "start_from", "burst_gap_seconds" } },
     { number = 2, title = "divide groups", keys = { "camera", "tag", "parent" } },
     { number = 3, title = "output", keys = { "native_groups", "write_tags" } },
     { number = 4, title = "run", keys = {} },
     { number = 5, title = "tools", keys = {} },
 }
 M.PANEL_OTHER_KEYS = {}
-M.ERR_NO_LAYER = "turn on at least one layer (burst timing, camera and lens, tag or parent tag), or Refine existing groups"
+M.ERR_NO_LAYER = "turn on at least one divide layer (camera and lens, tag or parent tag), or start from capture time or last run's groups"
+M.NOTICE_TAGS_OFF = "turn on Write group tags, or the next run finds no group tags to start from"
+M.NOTICE_NO_LAYER = "turn on at least one divide layer"
 
--- p = { timing, gap_text, camera, tag, parent, refine, write_tags, native_groups } as
+-- Maps the pre-start_from preset keys to a start_from value; refine wins over timing.
+function M.start_from_of(timing, refine)
+    if refine then return "tags" end
+    if timing == false then return "one" end
+    return "time"
+end
+
+-- Returns preset text that holds start_from, derived from the old timing/refine keys
+-- when absent; text that does not decode or already has start_from comes back unchanged.
+function M.upgrade_preset_text(text)
+    local decoded = C.preset_decode(text)
+    if not decoded or decoded.start_from ~= nil then return text end
+    decoded.start_from = M.start_from_of(decoded.timing, decoded.refine)
+    return C.preset_encode(M.PRESET_SCHEMA, decoded)
+end
+
+local function has_layer(p)
+    local tag, parent = trim(p.tag), trim(p.parent):gsub("|+$", "")
+    return p.start_from == "time" or p.start_from == "tags" or (p.camera and true or false) or tag ~= "" or parent ~= ""
+end
+
+local function layers_of(p)
+    return p.start_from == "time", p.start_from == "tags"
+end
+
+-- p = { start_from, gap_text, camera, tag, parent, write_tags, native_groups } as
 -- the panel reads them. Returns group_images options (blank tag/parent → nil, a
 -- trailing `|` on the parent dropped), or nil and why the run can't start.
 function M.panel_options(p)
     if not p.write_tags and not p.native_groups then return nil, M.ERR_NO_OUTPUT end
+    local timing, refine = layers_of(p)
     local gap = M.parse_gap(p.gap_text)
-    if p.timing and not gap then return nil, M.ERR_BAD_GAP end
+    if timing and not gap then return nil, M.ERR_BAD_GAP end
     local tag = trim(p.tag)
     local parent = trim(p.parent):gsub("|+$", "")
     local opts = {
-        timing = p.timing and true or false,
+        timing = timing,
         gap = gap,
         camera = p.camera and true or false,
         tag = tag ~= "" and tag or nil,
         parent = parent ~= "" and parent or nil,
-        refine = p.refine and true or false,
+        refine = refine,
         write_tags = p.write_tags and true or false,
         native_groups = p.native_groups and true or false,
     }
-    if not (opts.timing or opts.camera or opts.tag or opts.parent or opts.refine) then
+    if not has_layer(p) then
         return nil, M.ERR_NO_LAYER
     end
     return opts
+end
+
+-- The one line the panel shows under its settings: "" when nothing is wrong.
+function M.panel_notice(p)
+    if not p.write_tags and not p.native_groups then return M.ERR_NO_OUTPUT end
+    local timing, refine = layers_of(p)
+    if timing and not M.parse_gap(p.gap_text) then return M.ERR_BAD_GAP end
+    if refine and not p.write_tags then return M.NOTICE_TAGS_OFF end
+    if not has_layer(p) then return M.NOTICE_NO_LAYER end
+    return ""
 end
 
 -- Clear ------------------------------------------------------------------------
@@ -1555,6 +1605,52 @@ function M.reset_to_pairs(images)
     run_next()
 end
 
+-- Browse as bursts: regroups the selection from its group tags alone. Each tagged
+-- group becomes one native group and every untagged frame stays alone. Nothing is
+-- timed and no tags are written.
+function M.browse_bursts(images)
+    if busy then
+        dt.print("Assisted Grouping: another job is still running. Wait for it to finish, or cancel it first.")
+        return
+    end
+    if not images or #images == 0 then
+        dt.print("Assisted Grouping: select some images first")
+        return
+    end
+    busy = true
+    local ledger, changed = nil, false
+    local okr, err = pcall(function()
+        local records = M.build_images(images, true)
+        local units = M.collapse(records)
+        local base_of = M.base_of_from_tags(units)
+        start_log("bursts", #records)
+        if next(base_of) == nil then
+            say("Assisted Grouping: no group tags: run Group selection with Write group tags on")
+            return
+        end
+        local result = M.run_layers(units, { alone = true, base_of = base_of })
+        local untagged = 0
+        for _, unit in ipairs(units) do
+            if base_of[unit.id] == nil then untagged = untagged + 1 end
+        end
+        ledger = read_ledger()
+        changed = true
+        local counts = M.apply_native_groups(units, result.final_of, ledger)
+        log(string.format("bursts: %d images in %d groups, %d frames without a group tag, %d skipped (already in a hand-made group)",
+            #records, count_groups(result.final_of), untagged, counts.skipped))
+        local msg = string.format("Assisted Grouping: browsing %d images as %d bursts from their group tags.",
+            #records, count_groups(result.final_of))
+        if untagged > 0 then msg = msg .. string.format(" %d frames have no group tag and stay alone.", untagged) end
+        say(msg)
+    end)
+
+    if changed then write_ledger(ledger) end
+    busy = false
+    if not okr then notify_error("Assisted Grouping: browse as bursts failed. " .. tostring(err)) end
+    flush_log()
+    run_next()
+end
+
 local preset_file_store, make_preset_controls = C.preset_file_store, C.make_preset_controls
 
 
@@ -1581,62 +1677,98 @@ local function install_panel()
         if ctl then ctl.check_dirty() end
     end
 
-    local timing_check = dt.new_widget("check_button") {
-        label = "Burst timing",
-        tooltip = "Start a new group when the gap to the previous photo is longer than the burst gap below.",
-        value = true,
-        clicked_callback = changed,
+    local notice
+    local refresh_notice
+
+    -- changed_callback fires on every `selected` assignment, so act only when the value differs.
+    local shown_start = "time"
+    local gap_box
+    local start_combo = dt.new_widget("combobox") {
+        label = "start from",
+        tooltip = "capture time: a new group starts when the gap to the previous photo is longer than the burst gap. last run's groups: each photo's group tag from the latest earlier run; photos without one share one group. one group: every photo starts together and only the divide layers split it.",
+        changed_callback = function(widget)
+            local value = M.START_FROM[widget.selected]
+            if not value or value == shown_start then return end
+            shown_start = value
+            gap_box.visible = (value == "time")
+            changed()
+            refresh_notice()
+        end,
+        table.unpack(M.START_FROM_LABELS),
     }
+    start_combo.selected = 1
+
     local gap_entry = dt.new_widget("entry") {
-        tooltip = "Burst gap in seconds: photos taken closer together than this are one burst. Default: 2. Decimals are allowed (0.5 or 1,5). Lower it for fast bursts that should split; raise it when a burst has pauses.",
+        tooltip = "Burst gap in seconds: photos taken closer together than this are one burst. Must be above 0. Default: 2. Decimals are allowed (0.5 or 1,5). Lower it for fast bursts that should split; raise it when a burst has pauses.",
         placeholder = "burst gap (seconds), e.g. 2",
         text = "2",
+    }
+    gap_box = dt.new_widget("box") {
+        orientation = "vertical",
+        dt.new_widget("label") { label = "burst gap (seconds)", halign = "start" },
+        gap_entry,
     }
     local camera_check = dt.new_widget("check_button") {
         label = "Camera and lens",
         tooltip = "Divide each group by camera maker, model and lens.",
         value = false,
-        clicked_callback = changed,
+        clicked_callback = function() changed(); refresh_notice() end,
     }
     local tag_entry = dt.new_widget("entry") {
-        tooltip = "Divide each group into photos that carry exactly this tag and photos that don't (child tags don't count). Empty = off.",
+        tooltip = "Divide each group into photos that carry exactly this tag and photos that don't (child tags don't count). Empty = off. Example: Cars|Red.",
         placeholder = "tag, e.g. Cars|Red",
         text = "",
     }
     local parent_entry = dt.new_widget("entry") {
-        tooltip = "Divide each group by which tag directly under this node a photo carries. Photos with none, or several, aren't split by it (the log counts them). Empty = off.",
+        tooltip = "Divide each group by which tag directly under this node a photo carries. Photos with none, or several, aren't split by it (the log counts them). Empty = off. Example: Rally|2026. Use the Assisted Tagging prefix to split bursts by car.",
         placeholder = "parent tag, e.g. Cars|Number",
         text = "",
-    }
-    local refine_check = dt.new_widget("check_button") {
-        label = "Refine existing groups",
-        tooltip = "Start from each photo's group tag from the latest earlier run instead of burst timing; photos without one are timed among themselves (or share one group when Burst timing is off). The other layers then divide as usual.",
-        value = false,
-        clicked_callback = changed,
     }
     local native_check = dt.new_widget("check_button") {
         label = "Apply darktable groups",
         tooltip = "Default, quick output. Make one darktable group per final group of two or more photos. Photos already in a group you made by hand are skipped. Once this step starts, cancel is ignored so no group is left half-built.",
         value = true,
-        clicked_callback = changed,
+        clicked_callback = function() changed(); refresh_notice() end,
     }
     local tags_check = dt.new_widget("check_button") {
         label = "Write group tags",
         tooltip = "Tag each photo under Assisted Grouping|<run time>|... with its group and each layer's result. Adds time on a large selection.",
         value = false,
-        clicked_callback = changed,
+        clicked_callback = function() changed(); refresh_notice() end,
     }
 
-    local function read_panel()
-        local gap = M.parse_gap(gap_entry.text)
-        if not gap then return nil, M.ERR_BAD_GAP end
+    local function panel_state()
         return {
-            burst_gap_seconds = gap,
-            timing = timing_check.value,
+            start_from = M.START_FROM[start_combo.selected],
+            gap_text = gap_entry.text,
             camera = camera_check.value,
             tag = tag_entry.text,
             parent = parent_entry.text,
-            refine = refine_check.value,
+            write_tags = tags_check.value,
+            native_groups = native_check.value,
+        }
+    end
+
+    notice = dt.new_widget("label") { label = "", halign = "start", visible = false }
+    refresh_notice = function()
+        local text = M.panel_notice(panel_state())
+        notice.label = text
+        notice.visible = (text ~= "")
+    end
+
+    local function read_panel()
+        local start_from = M.START_FROM[start_combo.selected]
+        local gap = M.parse_gap(gap_entry.text)
+        if not gap then
+            if start_from == "time" then return nil, M.ERR_BAD_GAP end
+            gap = M.preset_defaults(M.PRESET_SCHEMA).burst_gap_seconds
+        end
+        return {
+            start_from = start_from,
+            burst_gap_seconds = gap,
+            camera = camera_check.value,
+            tag = tag_entry.text,
+            parent = parent_entry.text,
             native_groups = native_check.value,
             write_tags = tags_check.value,
         }
@@ -1644,33 +1776,29 @@ local function install_panel()
 
     local function show_panel(s)
         gap_entry.text = string.format("%.14g", s.burst_gap_seconds)
-        timing_check.value = s.timing
+        shown_start = s.start_from
+        for i, v in ipairs(M.START_FROM) do
+            if v == s.start_from and start_combo.selected ~= i then start_combo.selected = i end
+        end
+        gap_box.visible = (s.start_from == "time")
         camera_check.value = s.camera
         tag_entry.text = s.tag
         parent_entry.text = s.parent
-        refine_check.value = s.refine
         native_check.value = s.native_groups
         tags_check.value = s.write_tags
+        refresh_notice()
     end
 
     local function read_options()
         changed()
-        return M.panel_options({
-            timing = timing_check.value,
-            gap_text = gap_entry.text,
-            camera = camera_check.value,
-            tag = tag_entry.text,
-            parent = parent_entry.text,
-            refine = refine_check.value,
-            write_tags = tags_check.value,
-            native_groups = native_check.value,
-        })
+        return M.panel_options(panel_state())
     end
 
     local group_button = dt.new_widget("button") {
         label = "Group selection",
         tooltip = "Group the selected photos by the layers above. Cancel from the progress bar: before anything is written it changes nothing, while tags are being written it stops partway (partial tags stay), and once darktable groups have started it is ignored.",
         clicked_callback = function()
+            refresh_notice()
             local opts, why = read_options()
             if not opts then
                 dt.print("Assisted Grouping: " .. why)
@@ -1694,20 +1822,36 @@ local function install_panel()
             M.clear_marks(images)
         end,
     }
-    local pairs_button = dt.new_widget("button") {
-        label = "Reset to RAW+JPEG pairs",
-        tooltip = "Take the selected photos, and everything grouped with them, out of their darktable groups, then group each RAW with its JPEG again, as at import. Hand-made groups are reset too. Burst tags stay, so Group selection brings the burst groups back.",
+    local bursts_button = dt.new_widget("button") {
+        label = "bursts",
+        tooltip = "Put the selected photos back into their burst groups from the latest run's group tags. No capture times are read. Run Group selection with Write group tags on first.",
         clicked_callback = function()
             local images = copy_images(dt.gui.action_images)
-            if queue_if_busy("Reset to RAW+JPEG pairs", #images > 0, function() M.reset_to_pairs(images) end) then return end
+            if queue_if_busy("browse as bursts", #images > 0, function() M.browse_bursts(images) end) then return end
+            M.browse_bursts(images)
+        end,
+    }
+    local pairs_button = dt.new_widget("button") {
+        label = "pairs",
+        tooltip = "Take the selected photos, and everything grouped with them, out of their darktable groups, then stack each RAW with its JPEG again, as at import. Hand-made groups are reset too. Burst tags stay, so Group selection brings the burst groups back.",
+        clicked_callback = function()
+            local images = copy_images(dt.gui.action_images)
+            if queue_if_busy("browse as pairs", #images > 0, function() M.reset_to_pairs(images) end) then return end
             M.reset_to_pairs(images)
         end,
     }
 
+    local store = preset_file_store(LEDGER_DIR .. "/presets")
+    local raw_read = store.read
+    store.read = function(name)
+        local text = raw_read(name)
+        return text and M.upgrade_preset_text(text)
+    end
+
     ctl = make_preset_controls({
         prefix = "Assisted Grouping",
         schema = M.PRESET_SCHEMA,
-        store = preset_file_store(LEDGER_DIR .. "/presets"),
+        store = store,
         read_panel = read_panel,
         show = show_panel,
         remember = function(name) dt.preferences.write("assisted_grouping", "preset", "string", name) end,
@@ -1717,22 +1861,25 @@ local function install_panel()
     })
 
     local page_widgets = {
-        {
-            timing_check,
-            dt.new_widget("label") { label = "burst gap (seconds)", halign = "start" },
-            gap_entry,
-            refine_check,
-        },
+        { start_combo, gap_box },
         {
             camera_check,
-            dt.new_widget("label") { label = "by tag", halign = "start" },
+            dt.new_widget("label") { label = "Tag", halign = "start" },
             tag_entry,
-            dt.new_widget("label") { label = "by child of tag", halign = "start" },
+            dt.new_widget("label") { label = "Parent tag", halign = "start" },
             parent_entry,
         },
         { native_check, tags_check },
-        { group_button },
-        { clear_button, pairs_button },
+        {
+            group_button,
+            dt.new_widget("box") {
+                orientation = "horizontal",
+                dt.new_widget("label") { label = "browse as", halign = "start" },
+                bursts_button,
+                pairs_button,
+            },
+        },
+        { clear_button },
     }
     local pages = {}
     for i, page in ipairs(M.PANEL_PAGES) do
@@ -1744,10 +1891,12 @@ local function install_panel()
         reset_callback = function()
             show_panel(M.preset_defaults(M.PRESET_SCHEMA))
             changed()
+            refresh_notice()
         end,
         ctl.widget,
         C.paged_sections("assisted_grouping", pages),
         warning_label, -- below the pages so it shows whichever is open
+        notice,
     }
 
     dt.register_lib(

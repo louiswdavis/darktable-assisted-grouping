@@ -86,7 +86,7 @@ Start darktable, open **preferences → lua options**, and set **plugins folder 
 
 ## Using it
 
-Select the photos in lighttable, pick the layers and outputs in the **Assisted Grouping** panel (right side), and click **Group selection**. A progress bar appears in darktable's job area; its cancel button stops the run (see [Cancel](#cancel)). When it finishes, the message line says how many images ended up in how many groups, whether timing was sub-second or whole-second, and the run's stamp. Instead of the timing it says "timing off" when Burst timing is off, or "no timing needed" when Refine already grouped every dated frame; capture times aren't read in either case.
+Select the photos in lighttable, pick the layers and outputs in the **Assisted Grouping** panel (right side), and click **Group selection**. A progress bar appears in darktable's job area; its cancel button stops the run (see [Cancel](#cancel)). When it finishes, the message line says how many images ended up in how many groups, whether timing was sub-second or whole-second, and the run's stamp. Instead of the timing it says "timing off" when **start from** is *one group* or *last run's groups*, or "no timing needed" when *capture time* has nothing left to time; capture times aren't read in either case.
 
 Running all three plugins? [WORKFLOW.md](WORKFLOW.md) says which order to pick and what to re-run after what.
 
@@ -101,12 +101,12 @@ With **Write group tags** on, every photo gets:
 | Tag | When | Example |
 |---|---|---|
 | `Assisted Grouping\|<stamp>\|Group\|NNNN` | always | `Assisted Grouping\|2026-11-08 14:03:21\|Group\|0007` |
-| `Assisted Grouping\|<stamp>\|Burst\|NNNN` | Burst timing on and a camera, tag or parent layer is on (written even when that layer splits nothing) | `Assisted Grouping\|2026-11-08 14:03:21\|Burst\|0003` |
+| `Assisted Grouping\|<stamp>\|Burst\|NNNN` | **start from** is *capture time* and a camera, tag or parent layer is on (written even when that layer splits nothing) | `Assisted Grouping\|2026-11-08 14:03:21\|Burst\|0003` |
 | `Assisted Grouping\|<stamp>\|Camera\|<maker model lens>` | Camera and lens on | `Assisted Grouping\|2026-11-08 14:03:21\|Camera\|SONY ZV-E10 E PZ 16-50mm F3.5-5.6 OSS` |
 | `Assisted Grouping\|<stamp>\|Tag\|has <tag>` or `…\|not <tag>` | a tag is typed | `Assisted Grouping\|2026-11-08 14:03:21\|Tag\|has Red` |
 | `Assisted Grouping\|<stamp>\|Parent\|<child>` or `…\|none` | a parent tag is typed | `Assisted Grouping\|2026-11-08 14:03:21\|Parent\|42` |
 
-- `Group` is the final group after every layer; it's the one to read. When timing is the only layer, `Burst` would repeat `Group` exactly, so it is not written. `Burst` is the timing layer's result alone, for a consumer that only wants bursts. With **Refine existing groups** on, `Burst` instead holds the starting groups, i.e. the earlier run's final groups with its camera, tag and parent splits included, so it no longer means bursts alone.
+- `Group` is the final group after every layer; it's the one to read. When timing is the only layer, `Burst` would repeat `Group` exactly, so it is not written. `Burst` is the timing layer's result alone, for a consumer that only wants bursts. With *last run's groups* or *one group* there is no timing layer, so no `Burst` tag is written.
 - Numbers are four digits, zero-padded, counted from `0001` within a run.
 - `Camera` is maker, model and lens joined with spaces; `unknown` when darktable has none of them.
 - `Tag` uses the last segment of the tag you typed (`Cars|Red` gives `has Red`).
@@ -123,11 +123,11 @@ A RAW and a JPEG with the same folder and filename stem (extension and case igno
 
 **Replace (the default).** A re-run replaces the plugin's own earlier output on the selected images: tags from earlier runs that the ledger lists are detached, the new run's tags attached, and images are taken out of the plugin's old darktable groups before the new ones are built (each image is first moved into a group of its own, so a re-run can't scatter a group). Nothing the ledger doesn't list is touched.
 
-**Refine existing groups.** Instead of burst timing, the starting groups are each photo's `Group` tag from the latest earlier run (latest stamp wins when a photo has several). Photos with no group tag are timed among themselves (or share one group when Burst timing is off). Camera, tag and parent layers then divide as usual. The tags are the source of truth here: changes you made to darktable groups by hand are not read. The old tags are then replaced as in a normal run.
+**start from: last run's groups.** Instead of burst timing, the starting groups are each photo's `Group` tag from the latest earlier run (latest stamp wins when a photo has several). Photos with no group tag share one starting group, and the burst gap is hidden and unused. Camera, tag and parent layers then divide as usual. Frames with no group tag are no longer split by capture time in this mode; they share one starting group. The tags are the source of truth here: changes you made to darktable groups by hand are not read. The old tags are then replaced as in a normal run.
 
 **Clear grouping marks** removes, from the selected images only, the tags and darktable groups the ledger says the plugin made, and drops their ledger rows. An image you moved out of a plugin group by hand is left where it is. Your own tags and groups stay. The selected images of one frame (a RAW+JPEG pair or duplicates, same folder and filename stem) that Clear takes out of a plugin group are put back into one darktable group, led by the lowest id, so Clear doesn't break up the pairs darktable grouped at import.
 
-**Reset to RAW+JPEG pairs** takes the selected images, and every image grouped with them, out of their darktable groups, then puts each frame's files (same folder and filename stem) back into one group led by the lowest id, as darktable does at import. Tags stay, including the burst tags, so you can switch between burst groups and pairs: reset to pairs after culling to browse each kept frame with its JPEG stacked, then click **Group selection** to bring the bursts back. Hand-made groups are reset too, and the ledger forgets the plugin's darktable groups for these images.
+**browse as pairs** takes the selected images, and every image grouped with them, out of their darktable groups, then puts each frame's files (same folder and filename stem) back into one group led by the lowest id, as darktable does at import. Tags stay, including the burst tags, so you can switch between burst groups and pairs: **browse as pairs** after culling to browse each kept frame with its JPEG stacked, then click **browse as bursts** to come back. Hand-made groups are reset too, and the ledger forgets the plugin's darktable groups for these images. **browse as bursts** puts the selected photos back into their burst groups from the latest run's group tags, with no Python and no capture times read; it needs Write group tags to have been on, and on untagged frames it says "no group tags: run Group selection with Write group tags on". **Group selection** also brings the bursts back, but runs the whole pipeline.
 
 ### The ledger
 
@@ -145,13 +145,14 @@ A cancel doesn't wait for the helper. If it is still reading files, it finishes 
 
 ## Presets
 
-The **preset** picker at the top of the panel saves every panel setting (the layers, the burst gap and the outputs) under a name, so a shoot type is one click away.
+The **preset** picker at the top of the panel saves every panel setting (start from, the layers, the burst gap and the outputs) under a name, so a shoot type is one click away.
 
 - **preset**: `template` first, then your presets by name. Picking one loads its values into the panel. The panel opens on the last one you picked.
 - **template**: the built-in defaults. It can't be updated, renamed or deleted; use it as the starting point for a new preset.
 - **actions** beside it: **update preset "<name>"** saves the panel into the selected preset; **store new preset…** asks for a name (type it, then **OK**) and saves the panel as a new preset; **rename preset…**; **delete preset** asks first. On `template` only **store new preset…** is offered.
 - **unsaved changes** shows under the picker when the panel differs from the saved preset. Switching presets drops them. Text fields have no change signal, so their edits show when **actions** is opened or a run starts.
 - Each preset is `assisted_grouping/presets/<name>.json` in darktable's config folder. A name can't be `template` or use characters a Windows file name can't hold.
+- Old files with `timing` and `refine` keys still load: both on, or only `refine` on, loads as *last run's groups*; `timing` off and `refine` not on loads as *one group*; anything else loads as *capture time*. **update preset** rewrites the file with `start_from`.
 - A setting missing from a file uses its default; **update preset** writes every setting, so older files fill in. A value that's no longer valid uses the default and logs one line naming the preset and setting.
 - A file that can't be read or parsed: the panel says so, names the file, and keeps its current values. The plugin never rewrites a broken file; fix or delete it.
 
@@ -163,9 +164,10 @@ Layers run in a fixed order, and each one only divides the groups the one before
 
 ### 1 start groups
 
-- **Burst timing** (on by default). Sorts the frames by capture time and starts a new group when the gap to the previous frame is longer than the burst gap. A frame with no capture time is a group of its own, never merged and never dropped. Off: every frame starts in one shared group, and only the layers below divide it.
-- **burst gap (seconds)** (text field, default `2`). Frames closer together than this are one burst. Decimals allowed, with a point or a comma (`0.5`, `1,5`). Must be above 0, or the run refuses.
-- **Refine existing groups.** Starts from the latest earlier run's group tags instead of timing (see [Re-running and clearing](#re-running-and-clearing)).
+- **start from** (dropdown, default *capture time*). Where the groups begin before the divide layers run.
+  - *capture time*: sorts the frames by capture time and starts a new group when the gap to the previous frame is longer than the burst gap. A frame with no capture time is a group of its own, never merged and never dropped. The **burst gap (seconds)** box (text field, default `2`; frames closer together than this are one burst; decimals allowed, with a point or a comma, `0.5`, `1,5`; must be above 0, or the run refuses) shows only for this choice.
+  - *last run's groups*: starts from each photo's group tag from the latest earlier run; photos without one share one group (see [Re-running and clearing](#re-running-and-clearing)).
+  - *one group*: every photo starts together, and only the divide layers below split it.
 
 ### 2 divide groups
 
@@ -173,25 +175,27 @@ Layers run in a fixed order, and each one only divides the groups the one before
 - **Tag** (text field, e.g. `Cars|Red`). Divides each group into photos that carry exactly this tag and photos that don't. Child tags don't count. Empty = off.
 - **Parent tag** (text field, e.g. `Cars|Number`). Divides each group by which tag directly under this node a photo carries. A photo with no child under the node, or several, isn't split off by this layer: it stays with the group's first part. The log counts these photos.
 
-At least one layer (or Refine) must be on, or the run refuses: "turn on at least one layer (burst timing, camera and lens, tag or parent tag), or Refine existing groups".
+With *one group* at least one layer must be on, or the run refuses: "turn on at least one divide layer (camera and lens, tag or parent tag), or start from capture time or last run's groups".
 
-Separate bursts are never linked by the tag layers. One car tagged in bursts 3, 9 and 20 gives three groups: at a rally the cars loop past many times, and merging by tag would pull unrelated passes together.
+Separate bursts are never linked by the tag layers. One car tagged in bursts 3, 9 and 20 gives three groups: at a rally the cars loop past many times, and merging on the tag would pull unrelated passes together.
 
 ### 3 output
 
 - **Apply darktable groups** (on by default). One darktable group per final group of two or more photos. Photos already in a darktable group you made by hand are skipped, left in that group, and counted in the log. With only this output on, the layers are flattened into the final grouping, because a photo can only be in one darktable group.
-- **Write group tags** (off by default; slower on large selections). The tags in [What you get](#what-you-get). Needed for Refine existing groups and for anything that reads the tags.
+- **Write group tags** (off by default; slower on large selections). The tags in [What you get](#what-you-get). Needed for *last run's groups*, **browse as bursts** and anything that reads the tags.
 
 At least one output must be on, or the run refuses: "turn on at least one output (group tags or darktable groups)". Each output is only changed when it's on: a run with darktable groups off leaves the plugin's earlier darktable groups as they are, and a run with tags off leaves its earlier tags.
+
+A notice line below the pages says what would stop or undermine the next run, in this priority: "turn on at least one output (group tags or darktable groups)", then "the burst gap must be a number of seconds above 0, e.g. 2 or 0.5", then "turn on Write group tags, or the next run finds no group tags to start from" (*last run's groups* without Write group tags), then "turn on at least one divide layer" (*one group* with no layer). It is hidden when nothing is wrong. It updates from the **start from** dropdown, the three checkboxes (Camera and lens, Native groups, Write group tags), a preset load, the reset and the **Group selection** click. Text typed into burst gap, Tag or Parent tag is only checked after one of those.
 
 ### 4 run
 
 - **Group selection.** Runs the layers on the selected photos. The partial-burst warning sits under it.
+- **browse as**, with two buttons. **bursts** puts the selected photos back into their burst groups from the latest run's group tags; with no group tags it says "no group tags: run Group selection with Write group tags on". **pairs** ungroups the selected photos and their groups, then stacks each RAW with its JPEG again; tags stay. See [Re-running and clearing](#re-running-and-clearing).
 
 ### 5 tools
 
 - **Clear grouping marks.** Removes the plugin's tags and darktable groups from the selected photos (see [Re-running and clearing](#re-running-and-clearing)).
-- **Reset to RAW+JPEG pairs.** Ungroups the selected photos and their groups, then stacks each RAW with its JPEG again. Tags stay.
 
 Everything in sections 1 to 3 is saved with the [preset](#presets).
 
@@ -207,9 +211,9 @@ In **preferences → lua options**. Everything else is a panel setting saved wit
 ## How it works
 
 1. **Read the selection.** For each image: id, folder, filename, capture time (`exif_datetime_taken`), maker, model, lens and tags.
-2. **Sub-second times.** darktable's Lua only gives whole seconds, which can't tell the frames of a fast burst apart. The plugin writes a manifest of the dated frames the timing layer uses (one file per frame: the JPEG of a RAW+JPEG pair, else the RAW; none at all with Burst timing off, or for frames Refine already grouped), runs `python/exif_times.py` on it (on Windows through `pythonw.exe` and `python/launch.py`, like the sibling plugins), and adds each file's sub-second fraction to darktable's time.
+2. **Sub-second times.** darktable's Lua only gives whole seconds, which can't tell the frames of a fast burst apart. The plugin writes a manifest of the dated frames the timing layer uses (one file per frame: the JPEG of a RAW+JPEG pair, else the RAW; none at all unless **start from** is *capture time*), runs `python/exif_times.py` on it (on Windows through `pythonw.exe` and `python/launch.py`, like the sibling plugins), and adds each file's sub-second fraction to darktable's time.
 3. **Collapse frames.** RAW+JPEG pairs and duplicates become one frame.
-4. **Run the layers** in order: timing (or refine), camera and lens, tag, parent tag.
+4. **Run the layers** in order: the starting groups (capture time, last run's groups or one group), camera and lens, tag, parent tag.
 5. **Write.** Tags first (if on), then darktable groups (if on), then the ledger.
 
 ### Timing precision
@@ -249,11 +253,11 @@ Capture times use a constant offset with no daylight saving (`isdst = false`), s
 Known gaps, not yet fixed:
 
 - **RAW reading is confirmed on one file only.** ARW sub-seconds were read from one Sony ZV-E10 file; other cameras and RAW formats are untested. See [Timing precision](#timing-precision).
-- **Write group tags off** leaves tags from earlier runs on the images, and Refine existing groups still reads them.
+- **Write group tags off** leaves tags from earlier runs on the images, and *last run's groups* still reads them.
 - **Hand-moved images.** An image you moved by hand into a group of your own is still regrouped on a re-run if the ledger says the plugin grouped it.
 - **Stale leaders.** The ledger's darktable-group leader ids can go stale for images that weren't in the selection when their group changed.
 - **Cancel during tag writing** leaves partial tags. Only a cancel before anything is applied is guaranteed to change nothing, and a cancel is ignored once darktable groups have started.
-- **Undated frames with Burst timing off** all share the one starting group.
+- **Undated frames with start from set to *one group*** all share the one starting group.
 - **Clear acts on the selection only.** Unselected partners of a selected image (e.g. the JPEG of a selected RAW) keep their marks. Tags of old runs are detached but not deleted from darktable's tag library.
 - **Panel state** (checkboxes, text fields) isn't saved between sessions.
 - **"images grouped"** in the log counts the leader too.
@@ -274,7 +278,7 @@ The darktable side has never run: it was written without darktable to test again
 
 **First run (tags only)**
 
-4. **Select 30-60 frames with both RAW and JPEG of each frame**, including a fast burst, a night shot and frames from two different lenses. In the panel: Burst timing on, Write group tags ticked, Apply darktable groups unticked (the defaults are Apply on, Write off; tick Write group tags for this check, since steps 5 and 6 read the tags). Click **Group selection**. *Expect:* a progress bar, then "Assisted Grouping: N images in M groups (sub-second timing). Run YYYY-MM-DD HH:MM:SS."
+4. **Select 30-60 frames with both RAW and JPEG of each frame**, including a fast burst, a night shot and frames from two different lenses. In the panel: **start from** *capture time*, Write group tags ticked, Apply darktable groups unticked (the defaults are Apply on, Write off; tick Write group tags for this check, since steps 5 and 6 read the tags). Click **Group selection**. *Expect:* a progress bar, then "Assisted Grouping: N images in M groups (sub-second timing). Run YYYY-MM-DD HH:MM:SS."
 5. **Check the log** at `%LOCALAPPDATA%\darktable\assisted_grouping.log`. *Expect:* `group started`, the `run stamp …` settings line, `timing: sub-second`, `… frames in … groups (… bursts)`, `tags: … attached, 0 detached`, `run finished`.
 6. **Check the tags** in the tagging module. *Expect:* each image has `Assisted Grouping|<stamp>|Group|NNNN` (and no `Burst` tag, since timing is the only layer); the frames of the fast burst share one `Group` number; a RAW and its JPEG have identical tags; the night shot has its own tags like the rest.
 7. **RAW-only frames.** Select only the RAW (ARW) files of a few frames and run again. *Expect:* "(sub-second timing)" on screen and `timing: sub-second` in the log, since the helper reads ARW directly. If it says whole-second instead, note the image the `timing:` line names and run `.venv\Scripts\python python\probe_subsec.py <that file>` on it (macOS/Linux: `.venv/bin/python python/probe_subsec.py <that file>`).
@@ -282,12 +286,12 @@ The darktable side has never run: it was written without darktable to test again
 **Layers**
 
 8. **Camera and lens.** Select the two-lens frames, tick **Camera and lens** and **Write group tags**, run. *Expect:* a burst shot on two lenses splits into separate `Group` numbers, and each image has `Assisted Grouping|<stamp>|Camera|<maker model lens>`.
-9. **Refine.** Untick Camera and lens, tick **Refine existing groups** and **Write group tags**, type a tag that some of the frames carry into the Tag field, run. *Expect:* groups start from the previous run's `Group` tags and are split by the tag; images get `…|Tag|has <tag>` or `…|Tag|not <tag>`; the previous stamp's tags are gone from these images.
+9. **Last run's groups.** Untick Camera and lens, set **start from** to *last run's groups* (the burst gap box hides) and tick **Write group tags**, type a tag that some of the frames carry into the Tag field, run. *Expect:* groups start from the previous run's `Group` tags and are split by the tag; images get `…|Tag|has <tag>` or `…|Tag|not <tag>`; the previous stamp's tags are gone from these images.
 
 **Re-run and darktable groups**
 
 10. **Hand-made marks.** Apply a tag of your own to two of the selected frames. Make a darktable group by hand from two frames in the middle of one selected burst (select both files of each frame and use your darktable version's group command; the shortcut is often ctrl+g, unverified). Also make a second hand-made group from two frames outside the selection.
-11. **Darktable groups only.** Untick Refine and clear the Tag field. Make sure **Apply darktable groups** is ticked, untick **Write group tags**, and run on the step 4 selection. *Expect:* with grouping turned on in lighttable (in your darktable version, look for the grouping on/off toggle in the lighttable top bar; unverified), each burst collapses to one thumbnail (the burst holding your hand-made group shows two stacks, because those images are skipped); both hand-made groups are unchanged; the log has `native groups: … images grouped, N skipped (already in a hand-made group)`, where N is the number of images in the first hand-made group (4 for two RAW+JPEG frames).
+11. **Darktable groups only.** Set **start from** back to *capture time* and clear the Tag field. Make sure **Apply darktable groups** is ticked, untick **Write group tags**, and run on the step 4 selection. *Expect:* with grouping turned on in lighttable (in your darktable version, look for the grouping on/off toggle in the lighttable top bar; unverified), each burst collapses to one thumbnail (the burst holding your hand-made group shows two stacks, because those images are skipped); both hand-made groups are unchanged; the log has `native groups: … images grouped, N skipped (already in a hand-made group)`, where N is the number of images in the first hand-made group (4 for two RAW+JPEG frames).
 12. **Re-run replaces, no scattering.** Tick both outputs and run again on the same selection. *Expect:* the previous stamp's tags are gone from these images, only the new stamp's remain; your own tag survives; each burst is still one darktable group, with no images left in stray groups.
 13. **Log and ledger location.** *Expect:* `assisted_grouping.log` and `assisted_grouping.prev.log` in `%LOCALAPPDATA%\darktable`, and `%LOCALAPPDATA%\darktable\assisted_grouping\ledger.csv` with `tag` and `group` rows for the step 4 selection.
 
@@ -296,7 +300,7 @@ The darktable side has never run: it was written without darktable to test again
 14. **Clear.** With the same selection, click **Clear grouping marks**. *Expect:* "cleared grouping marks from N images"; the plugin's tags and darktable groups are gone; your own tag and the hand-made group are still there; the cleared images' rows are gone from `ledger.csv`; each RAW+JPEG pair is still one darktable group (two images per stack with grouping on), and the log's `clear:` line counts the `frame groups restored`.
 15. **Cancel before applying.** Select all 30-60 frames, run, and cancel from the progress bar straight away. *Expect:* "cancelled, nothing was changed." and no new tags or groups. (If the run finished before you could cancel, note that instead.) Click **Group selection** again straight after. *Expect:* it starts at once (no "still stopping" message) and finishes normally.
 16. **Both outputs off.** Untick both outputs and click **Group selection**. *Expect:* the run refuses with "turn on at least one output (group tags or darktable groups)" and nothing changes.
-17. **Reset to pairs and back.** Tick both outputs, run **Group selection** on RAW+JPEG frames, then select one collapsed burst and click **Reset to RAW+JPEG pairs**. *Expect:* "reset N images to M RAW+JPEG pairs. Tags kept."; every frame of that burst is its own stack of two; the burst tags are still on them; the log's `pairs:` line matches. Click **Group selection** on the same frames. *Expect:* the burst is one darktable group again.
+17. **Browse as pairs and back.** Tick both outputs, run **Group selection** on RAW+JPEG frames, then select one collapsed burst and click **browse as pairs**. *Expect:* "reset N images to M RAW+JPEG pairs. Tags kept."; every frame of that burst is its own stack of two; the burst tags are still on them; the log's `pairs:` line matches. Click **bursts** on the same frames. *Expect:* "browsing N images as M bursts from their group tags.", the burst is one darktable group again, and the log has no helper (Python) line. Click **Group selection** on the same frames too: the burst is one darktable group again.
 
 ### Report what breaks
 

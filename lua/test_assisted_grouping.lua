@@ -435,6 +435,15 @@ local based_off = A.run_layers({ cu(1, { epoch = 0 }), cu(2, { epoch = 100 }), c
     { timing = false, base_of = { [1] = 1, [2] = 2 } })
 check("timing off + base_of: the rest share one group after the base groups",
     based_off.burst_of[1] .. based_off.burst_of[2] .. based_off.burst_of[3] .. based_off.burst_of[4], "1233")
+local alone_units = { cu(1, { epoch = 0 }), cu(2, { epoch = 1 }), cu(3, { epoch = 2 }), cu(4, { epoch = 3 }) }
+local alone_run = A.run_layers(alone_units, { alone = true, base_of = { [1] = 1, [2] = 1 } })
+check("run_layers alone: base groups kept, rest each alone",
+    alone_run.burst_of[1] == 1 and alone_run.burst_of[2] == 1 and alone_run.burst_of[3] ~= alone_run.burst_of[4]
+    and alone_run.burst_of[3] ~= 1 and alone_run.burst_of[4] ~= 1, true)
+check("run_layers alone: result.timing is false", alone_run.timing, false)
+local alone_empty = A.run_layers(alone_units, { alone = true, base_of = {} })
+check("run_layers alone: empty base_of gives one group per unit",
+    alone_empty.burst_of[1] .. alone_empty.burst_of[2] .. alone_empty.burst_of[3] .. alone_empty.burst_of[4], "1234")
 local no_burst = A.wanted_tags(pair, A.run_layers(pair, { timing = false }), STAMP, {})
 check("wanted_tags: timing off writes no Burst tag", keys(no_burst[12]),
     "Assisted Grouping|2026-11-08 22:45:10|Group|0001")
@@ -457,8 +466,8 @@ check("parse_gap: two dots are rejected", A.parse_gap("1.2.3"), nil)
 
 -- panel_options ------------------------------------------------------------------
 local function panel(over)
-    local p = { timing = true, gap_text = "2", camera = false, tag = "", parent = "",
-        refine = false, write_tags = true, native_groups = false }
+    local p = { start_from = "time", gap_text = "2", camera = false, tag = "", parent = "",
+        write_tags = true, native_groups = false }
     for k, v in pairs(over or {}) do p[k] = v end
     return p
 end
@@ -466,18 +475,45 @@ local o, why = A.panel_options(panel({ write_tags = false, native_groups = false
 check("panel_options: both outputs off refuses", tostring(o) .. " / " .. tostring(why), "nil / " .. A.ERR_NO_OUTPUT)
 o, why = A.panel_options(panel({ gap_text = "abc" }))
 check("panel_options: bad gap with timing on refuses", why, A.ERR_BAD_GAP)
-o = A.panel_options(panel({ gap_text = "abc", timing = false, camera = true }))
+o = A.panel_options(panel({ gap_text = "abc", start_from = "one", camera = true }))
 check("panel_options: bad gap ignored with timing off", o and o.gap, nil)
 check("panel_options: timing off passes timing = false", o and o.timing, false)
-o, why = A.panel_options(panel({ timing = false }))
+o, why = A.panel_options(panel({ start_from = "one" }))
 check("panel_options: no layer and no refine refuses", why, A.ERR_NO_LAYER)
-o = A.panel_options(panel({ timing = false, refine = true, native_groups = true, write_tags = false }))
+o = A.panel_options(panel({ start_from = "tags", native_groups = true, write_tags = false }))
 check("panel_options: refine alone is enough", o ~= nil and o.refine and o.native_groups and not o.write_tags, true)
 o = A.panel_options(panel({ gap_text = "0,5", tag = "  Cars|Red ", parent = " Cars|Number| " }))
 check("panel_options: gap parsed, tag trimmed, trailing | dropped from parent",
     o.gap .. " / " .. o.tag .. " / " .. o.parent, "0.5 / Cars|Red / Cars|Number")
 o = A.panel_options(panel({ tag = "   ", parent = "|" }))
 check("panel_options: blank tag and parent become nil", o.tag == nil and o.parent == nil, true)
+
+check("start_from_of: refine wins", A.start_from_of(true, true), "tags")
+check("start_from_of: timing off", A.start_from_of(false, false), "one")
+check("start_from_of: nil keys default to time", A.start_from_of(nil, nil), "time")
+
+local function upgraded(text) return A.preset_merge(A.PRESET_SCHEMA, A.preset_decode(A.upgrade_preset_text(text))) end
+check("upgrade_preset_text: timing=false, refine=true loads as tags",
+    (upgraded('{"version": 1, "timing": false, "refine": true}')).start_from, "tags")
+check("upgrade_preset_text: both on loads as tags",
+    (upgraded('{"version": 1, "timing": true, "refine": true}')).start_from, "tags")
+check("upgrade_preset_text: timing=false, refine=false loads as one",
+    (upgraded('{"version": 1, "timing": false, "refine": false}')).start_from, "one")
+local empty_s, empty_problems = upgraded("{}")
+check("upgrade_preset_text: empty object loads as time", empty_s.start_from .. " " .. #empty_problems, "time 0")
+local has_start = '{"version": 1, "start_from": "one"}'
+check("upgrade_preset_text: start_from present is returned unchanged", A.upgrade_preset_text(has_start), has_start)
+check("upgrade_preset_text: undecodable text is returned unchanged", A.upgrade_preset_text("not json"), "not json")
+
+check("panel_notice: fine is empty", A.panel_notice(panel()), "")
+check("panel_notice: both outputs off", A.panel_notice(panel({ write_tags = false, native_groups = false })), A.ERR_NO_OUTPUT)
+check("panel_notice: bad gap with capture time", A.panel_notice(panel({ gap_text = "abc" })), A.ERR_BAD_GAP)
+check("panel_notice: bad gap ignored with one group", A.panel_notice(panel({ gap_text = "abc", start_from = "one", camera = true })), "")
+check("panel_notice: tags source without write tags", A.panel_notice(panel({ start_from = "tags", write_tags = false, native_groups = true })), A.NOTICE_TAGS_OFF)
+check("panel_notice: tags source counts as a layer", A.panel_notice(panel({ start_from = "tags", write_tags = true })), "")
+check("panel_notice: one group without a layer", A.panel_notice(panel({ start_from = "one" })), A.NOTICE_NO_LAYER)
+check("panel_notice: outputs off outranks bad gap",
+    A.panel_notice(panel({ gap_text = "abc", write_tags = false, native_groups = false })), A.ERR_NO_OUTPUT)
 
 -- plan_clear -----------------------------------------------------------------------
 local clear_ledger = {
@@ -688,8 +724,10 @@ check("write_file_atomic: unwritable folder fails", A.write_file_atomic("/nonexi
 require("test_preset_block")(A, check)
 
 local pd = A.preset_defaults(A.PRESET_SCHEMA)
-check("preset schema: defaults", string.format("%s %s %s [%s] [%s] %s %s %s", pd.burst_gap_seconds, pd.timing, pd.camera,
-    pd.tag, pd.parent, pd.refine, pd.native_groups, pd.write_tags), "2 true false [] [] false true false")
+check("preset schema: defaults", string.format("%s %s %s [%s] [%s] %s %s", pd.start_from, pd.burst_gap_seconds, pd.camera,
+    pd.tag, pd.parent, pd.native_groups, pd.write_tags), "time 2 false [] [] true false")
+local _, start_problems = A.preset_merge(A.PRESET_SCHEMA, A.preset_decode('{"start_from": "yesterday"}'))
+check("preset schema: start_from accepts only its choices", table.concat(start_problems, " "):find("start_from", 1, true) ~= nil, true)
 check("preset schema: decimal gap kept", A.preset_merge(A.PRESET_SCHEMA, A.preset_decode('{"burst_gap_seconds": 0.5}')).burst_gap_seconds, 0.5)
 local page_missing, page_duplicate = PC.page_coverage(A.PANEL_PAGES, A.PANEL_OTHER_KEYS, A.PRESET_SCHEMA)
 check("PANEL_PAGES: every preset key is on one page or listed off-stack",
