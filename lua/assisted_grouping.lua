@@ -1197,13 +1197,11 @@ local function helper_script()
         end
         return script
     end
-    local home = os.getenv("USERPROFILE") or os.getenv("HOME") or ""
     local found = first_existing({
         THIS_DIR .. "/exif_times.py",
         THIS_DIR .. "/python/exif_times.py",
         THIS_DIR .. "/../python/exif_times.py",
         THIS_DIR .. "/../../python/exif_times.py",
-        home .. "/Pictures/DarkTable/Settings/Plugins/darktable-assisted-grouping/python/exif_times.py",
     })
     return found or (THIS_DIR .. "/../python/exif_times.py")
 end
@@ -1219,14 +1217,12 @@ local function python_bin(script)
     local pref = dt.preferences.read("assisted_grouping", "python_bin", "file")
     if pref and pref ~= "" then return pref end
 
-    local home = os.getenv("USERPROFILE") or os.getenv("HOME") or ""
     local root = plugin_root(script)
     local found = first_existing({
         root .. "/.venv/Scripts/python.exe",
         root .. "/.venv/bin/python",
         THIS_DIR .. "/../.venv/Scripts/python.exe",
         THIS_DIR .. "/../.venv/bin/python",
-        home .. "/Pictures/DarkTable/Settings/Plugins/darktable-assisted-grouping/.venv/Scripts/python.exe",
     })
     if found then return found end
 

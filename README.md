@@ -52,7 +52,7 @@ python3 -m venv .venv
 
 darktable's config directory is `~/.config/darktable` on Linux/macOS and `%LOCALAPPDATA%\darktable` on Windows. Link the plugin into it and load it from `luarc`.
 
-The plugin is one Lua file, `lua/assisted_grouping.lua`. An older install also linked `grouping_core.lua`; that file is gone, so delete its link from `lua/contrib`.
+The plugin is one Lua file, `lua/assisted_grouping.lua`.
 
 Linux / macOS:
 
@@ -232,7 +232,7 @@ Capture times use a constant offset with no daylight saving (`isdst = false`), s
 
 ## Troubleshooting
 
-- **The panel isn't there.** Start darktable with `-d lua` and look for `LUA ERROR` in the log. On Windows the log is `Documents\Darktable\darktable-log.txt`. A `module 'grouping_core' not found` error means darktable is loading an old copy of `assisted_grouping.lua`: re-link or re-copy it from this repo.
+- **The panel isn't there.** Start darktable with `-d lua` and look for `LUA ERROR` in the log. On Windows the log is `Documents\Darktable\darktable-log.txt`. A `module ... not found` error means darktable is loading an old copy of `assisted_grouping.lua`: re-link or re-copy it from this repo.
 - **Every run writes a log** to `assisted_grouping.log` in darktable's config directory (`%LOCALAPPDATA%\darktable\assisted_grouping.log` on Windows); the run before it is kept as `assisted_grouping.prev.log`. It has the run stamp and every setting, the timing line, the frame and group counts, how many photos the parent layer left unsplit, the tags attached and detached, the darktable groups made and skipped, every message shown on screen, and the helper's errors. Start here when a result looks wrong.
 - **"the plugin folder preference (…) has no python/exif_times.py."** Point the preference at the `darktable-assisted-grouping` folder, or clear it to auto-detect.
 - **The run always says whole-second.** Read the reason on the `timing:` line. If it names a RAW image, the helper couldn't read that RAW (check that `exifread` is installed in the interpreter, or select the JPEGs too). "exif_times.py stopped with exit code …" usually means the interpreter has no Pillow: install `python/requirements.txt` into it.
