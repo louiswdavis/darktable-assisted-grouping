@@ -612,6 +612,32 @@ function M.plan_clear(records, ledger, members_of)
     return plans, restore
 end
 
+-- Reset to pairs: the native groups that put each frame's files back together
+-- (frame_key: same dir and stem, ignoring case), as darktable groups RAW+JPEG
+-- pairs and duplicates at import. records = { id, dir, filename }, duplicates by
+-- id ignored. Returns { { leader = lowest id, members = sorted ids } } for frames
+-- of 2+ files, sorted by leader; every other image ends up alone.
+function M.plan_pairs(records)
+    local by_frame, seen = {}, {}
+    for _, r in ipairs(records) do
+        if not seen[r.id] and r.filename then
+            seen[r.id] = true
+            local k = frame_key(r)
+            by_frame[k] = by_frame[k] or {}
+            table.insert(by_frame[k], r.id)
+        end
+    end
+    local groups = {}
+    for _, ids in pairs(by_frame) do
+        if #ids >= 2 then
+            table.sort(ids)
+            groups[#groups + 1] = { leader = ids[1], members = ids }
+        end
+    end
+    table.sort(groups, function(a, b) return a.leader < b.leader end)
+    return groups
+end
+
 -- Pure helpers ------------------------------------------------------------------
 
 local function blank_to_nil(s)
@@ -1740,6 +1766,92 @@ function M.clear_marks(images)
     run_next()
 end
 
+-- Reset to RAW+JPEG pairs: takes the selection, and everything grouped with it, out
+-- of its darktable groups, then groups each frame's files again (M.plan_pairs).
+-- Burst and group tags stay, so the plugin's groups come back with Group selection.
+-- Hand-made groups are reset too. The ledger forgets the plugin's native groups here.
+function M.reset_to_pairs(images)
+    if busy then
+        dt.print("Assisted Grouping: another job is still running. Wait for it to finish, or cancel it first.")
+        return
+    end
+    if not images or #images == 0 then
+        dt.print("Assisted Grouping: select some images first")
+        return
+    end
+    busy = true
+    local ledger, changed = nil, false
+    local okr, err = pcall(function()
+        local records, img_of = {}, {}
+        local function add(img)
+            local id = tonumber(img.id)
+            if not img_of[id] then
+                img_of[id] = img
+                records[#records + 1] = { id = id, dir = img.path, filename = img.filename }
+            end
+        end
+        for _, img in ipairs(images) do
+            add(img)
+            for _, other in ipairs(img:get_group_members()) do add(other) end
+        end
+        start_log("pairs", #records)
+        ledger = read_ledger()
+
+        local writes, failed, first_error = 0, 0, nil
+        local function write(fn)
+            local okw, werr = pcall(fn)
+            if not okw then
+                failed = failed + 1
+                first_error = first_error or tostring(werr)
+            end
+            writes = writes + 1
+            if writes >= WRITE_BUDGET then
+                writes = 0
+                dt.control.sleep(WRITE_SLEEP_MS)
+            end
+            return okw
+        end
+
+        -- Every image is detached before any attach, so no leader is pulled out of a group mid-way.
+        local alone = {}
+        for _, r in ipairs(records) do
+            if write(function() img_of[r.id]:group_with() end) then
+                alone[r.id] = true
+                if ledger[r.id] and ledger[r.id].native then
+                    M.set_ledger_native(ledger, r.id, nil)
+                    changed = true
+                end
+            end
+        end
+        local n_pairs = 0
+        for _, group in ipairs(M.plan_pairs(records)) do
+            local ok_ids = {}
+            for _, id in ipairs(group.members) do
+                if alone[id] then ok_ids[#ok_ids + 1] = id end
+            end
+            if #ok_ids >= 2 then
+                local leader = img_of[ok_ids[1]]
+                for i = 2, #ok_ids do
+                    write(function() img_of[ok_ids[i]]:group_with(leader) end)
+                end
+                n_pairs = n_pairs + 1
+            end
+        end
+        log(string.format("pairs: %d images ungrouped, %d frame groups made, %d failed",
+            #records, n_pairs, failed))
+        if failed > 0 then
+            notify_error(string.format("Assisted Grouping: couldn't reset %d images: %s", failed, first_error))
+        end
+        say(string.format("Assisted Grouping: reset %d images to %d RAW+JPEG pairs. Tags kept.", #records, n_pairs))
+    end)
+
+    if changed then write_ledger(ledger) end
+    busy = false
+    if not okr then notify_error("Assisted Grouping: reset to pairs failed. " .. tostring(err)) end
+    flush_log()
+    run_next()
+end
+
 -- Preset controls: drift-guarded copy in grouping, culling and tagging. Change all three.
 -- The preset picker and actions menu at the top of the panel. Lua panels can't use darktable's
 -- own presets (lualib.c leaves get_params/set_params NULL), so this builds its own.
@@ -2230,6 +2342,15 @@ local function install_panel()
             M.clear_marks(images)
         end,
     }
+    local pairs_button = dt.new_widget("button") {
+        label = "Reset to RAW+JPEG pairs",
+        tooltip = "Take the selected photos, and everything grouped with them, out of their darktable groups, then group each RAW with its JPEG again, as at import. Hand-made groups are reset too. Burst tags stay, so Group selection brings the burst groups back.",
+        clicked_callback = function()
+            local images = copy_images(dt.gui.action_images)
+            if queue_if_busy("Reset to RAW+JPEG pairs", #images > 0, function() M.reset_to_pairs(images) end) then return end
+            M.reset_to_pairs(images)
+        end,
+    }
 
     ctl = make_preset_controls({
         prefix = "Assisted Grouping",
@@ -2267,7 +2388,7 @@ local function install_panel()
         step_label(4, "run"),
         group_button,
         warning_label,
-        make_section(nil, "tools", { clear_button }),
+        make_section(nil, "tools", { clear_button, pairs_button }),
     }
 
     dt.register_lib(

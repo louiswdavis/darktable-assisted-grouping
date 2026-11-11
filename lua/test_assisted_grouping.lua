@@ -491,6 +491,16 @@ check("plan_clear: two cleared RAW+JPEG pairs -> two restore groups under their 
 check("plan_clear: a lone image gets no restore group", restore_str(prestore):find("15") == nil, true)
 check("plan_clear: hand-made cross-frame group is left alone", pplans[6].ungroup or pplans[7].ungroup, false)
 
+-- plan_pairs --------------------------------------------------------------------------
+local pair_groups = A.plan_pairs({
+    crec(14, "DSC0002.JPG"), crec(11, "DSC0001.ARW"), crec(12, "dsc0001.jpg"), crec(13, "DSC0002.ARW"),
+    crec(15, "DSC0003.JPG"), crec(12, "dsc0001.jpg"),
+    { id = 16, tags = {}, dir = "/other", filename = "DSC0001.JPG" },
+})
+check("plan_pairs: one group per frame under its lowest id, stem case ignored, repeats once",
+    restore_str(pair_groups), restore_str({ { leader = 11, members = { 11, 12 } }, { leader = 13, members = { 13, 14 } } }))
+check("plan_pairs: no records, no groups", #A.plan_pairs({}), 0)
+
 -- subsec_fractions ------------------------------------------------------------------
 local function srec(id, dir, filename, epoch) return { id = id, dir = dir, filename = filename, epoch = epoch == nil and 100 or epoch } end
 local function near(a, b) return a ~= nil and math.abs(a - b) < 1e-6 end

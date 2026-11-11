@@ -125,6 +125,8 @@ A RAW and a JPEG with the same folder and filename stem (extension and case igno
 
 **Clear grouping marks** removes, from the selected images only, the tags and darktable groups the ledger says the plugin made, and drops their ledger rows. An image you moved out of a plugin group by hand is left where it is. Your own tags and groups stay. The selected images of one frame (a RAW+JPEG pair or duplicates, same folder and filename stem) that Clear takes out of a plugin group are put back into one darktable group, led by the lowest id, so Clear doesn't break up the pairs darktable grouped at import.
 
+**Reset to RAW+JPEG pairs** takes the selected images, and every image grouped with them, out of their darktable groups, then puts each frame's files (same folder and filename stem) back into one group led by the lowest id, as darktable does at import. Tags stay, including the burst tags, so you can switch between burst groups and pairs: reset to pairs after culling to browse each kept frame with its JPEG stacked, then click **Group selection** to bring the bursts back. Hand-made groups are reset too, and the ledger forgets the plugin's darktable groups for these images.
+
 ### The ledger
 
 The plugin records what it made in `assisted_grouping/ledger.csv` in darktable's config directory (`%LOCALAPPDATA%\darktable\assisted_grouping\ledger.csv` on Windows). Rows are `id,tag,<tag name>` for each tag it attached and `id,group,<leader id>` for each image it put in a darktable group. Anything not in the ledger is yours. A plugin tag you removed by hand drops out of the ledger the next time a run writes tags on that image. Deleting the file makes every existing `Assisted Grouping` tag and group look hand-made: re-runs and Clear then leave them alone.
@@ -187,6 +189,7 @@ At least one output must be on, or the run refuses: "turn on at least one output
 ### tools
 
 - **Clear grouping marks.** Removes the plugin's tags and darktable groups from the selected photos (see [Re-running and clearing](#re-running-and-clearing)).
+- **Reset to RAW+JPEG pairs.** Ungroups the selected photos and their groups, then stacks each RAW with its JPEG again. Tags stay.
 
 Everything in sections 1 to 3 is saved with the [preset](#presets).
 
@@ -291,6 +294,7 @@ The darktable side has never run: it was written without darktable to test again
 14. **Clear.** With the same selection, click **Clear grouping marks**. *Expect:* "cleared grouping marks from N images"; the plugin's tags and darktable groups are gone; your own tag and the hand-made group are still there; the cleared images' rows are gone from `ledger.csv`; each RAW+JPEG pair is still one darktable group (two images per stack with grouping on), and the log's `clear:` line counts the `frame groups restored`.
 15. **Cancel before applying.** Select all 30-60 frames, run, and cancel from the progress bar straight away. *Expect:* "cancelled, nothing was changed." and no new tags or groups. (If the run finished before you could cancel, note that instead.) Click **Group selection** again straight after. *Expect:* it starts at once (no "still stopping" message) and finishes normally.
 16. **Both outputs off.** Untick both outputs and click **Group selection**. *Expect:* the run refuses with "turn on at least one output (group tags or darktable groups)" and nothing changes.
+17. **Reset to pairs and back.** Tick both outputs, run **Group selection** on RAW+JPEG frames, then select one collapsed burst and click **Reset to RAW+JPEG pairs**. *Expect:* "reset N images to M RAW+JPEG pairs. Tags kept."; every frame of that burst is its own stack of two; the burst tags are still on them; the log's `pairs:` line matches. Click **Group selection** on the same frames. *Expect:* the burst is one darktable group again.
 
 ### Report what breaks
 
