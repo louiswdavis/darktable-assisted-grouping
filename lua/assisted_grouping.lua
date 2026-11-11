@@ -10,11 +10,14 @@
 local THIS_DIR = (debug.getinfo(1, "S").source:sub(2):match("^(.*)[/\\]")) or "."
 
 -- plugin_common.lua lives beside this file; when this file was copied into lua/contrib by
--- hand it is found through the plugin folder preference instead.
+-- hand it is found through the plugins folder preference (or the old plugin folder one).
+-- C.plugin_folder isn't loaded yet, so both keys are read here directly.
 local function load_common()
     local dirs, tried = { THIS_DIR }, {}
     local ok_dt, dt0 = pcall(require, "darktable")
     if ok_dt then
+        local ok_r, root = pcall(dt0.preferences.read, "assisted_plugins", "plugins_root", "directory")
+        if ok_r and root and root ~= "" then dirs[#dirs + 1] = root .. "/darktable-assisted-grouping/lua" end
         local ok_p, folder = pcall(dt0.preferences.read, "assisted_grouping", "plugin_folder", "directory")
         if ok_p and folder and folder ~= "" then dirs[#dirs + 1] = folder .. "/lua" end
     end
@@ -25,7 +28,7 @@ local function load_common()
         tried[#tried + 1] = path
     end
     error("assisted_grouping: plugin_common.lua not found (tried " .. table.concat(tried, ", ")
-        .. "). Copy it next to assisted_grouping.lua, or set the plugin folder preference.")
+        .. "). Copy it next to assisted_grouping.lua, or set the plugins folder preference.")
 end
 local C = load_common()
 
@@ -882,14 +885,7 @@ local LEDGER_PATH = LEDGER_DIR .. "/ledger.csv"
 local LIB_KEY = C.library_key(dt)
 
 if dt.gui then
-    dt.preferences.register("assisted_grouping", "python_bin", "file",
-        "Assisted Grouping: Python interpreter",
-        "Python executable with Pillow and exifread installed (python/requirements.txt, e.g. .venv\\Scripts\\python.exe). Empty = auto-detect the repo's .venv",
-        "")
-    dt.preferences.register("assisted_grouping", "plugin_folder", "directory",
-        "Assisted Grouping: plugin folder",
-        "The darktable-assisted-grouping folder (holds python/ and .venv). Empty = auto-detect",
-        "")
+    C.register_shared_prefs(dt)
 end
 
 M.tags_of = function(img)
@@ -946,7 +942,7 @@ local function start_log(what, n)
 end
 
 local function plugin_folder_pref()
-    return (dt.preferences.read("assisted_grouping", "plugin_folder", "directory") or ""):gsub("[/\\]+$", "")
+    return C.plugin_folder(dt, "assisted_grouping", "darktable-assisted-grouping", log)
 end
 
 -- From the plugin folder preference alone when it's set; a wrong folder is an
@@ -956,7 +952,7 @@ local function helper_script()
     if folder ~= "" then
         local script = folder .. "/python/exif_times.py"
         if not file_exists(script) then
-            error(string.format("Assisted Grouping: the plugin folder preference (%s) has no python/exif_times.py. Point it at the darktable-assisted-grouping folder, or clear it to auto-detect.", folder), 0)
+            error(string.format("Assisted Grouping: the plugins folder preference gives %s, which has no python/exif_times.py. Point it at the folder holding darktable-assisted-grouping, or clear it to auto-detect.", folder), 0)
         end
         return script
     end
@@ -977,8 +973,8 @@ local function plugin_root(script)
 end
 
 local function python_bin(script)
-    local pref = dt.preferences.read("assisted_grouping", "python_bin", "file")
-    if pref and pref ~= "" then return pref end
+    local pref = C.python_bin(dt, "assisted_grouping", log)
+    if pref ~= "" then return pref end
 
     local root = plugin_root(script)
     local found = first_existing({
