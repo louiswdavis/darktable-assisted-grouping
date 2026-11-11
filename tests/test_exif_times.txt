@@ -1,0 +1,26 @@
+ok   SubSec '47' -> +0.47
+ok   SubSec '5' -> +0.5
+ok   SubSec '047' -> +0.047
+ok   no subsec -> whole epoch
+ok   no subsec -> integral value
+ok   non-digit SubSec '8a' -> whole epoch
+ok   CLI exit code ()
+ok   non-digit SubSec '8a' -> CLI whole precision
+ok   DateTimeOriginal 0000:00:00 00:00:00 -> None
+ok   no EXIF -> None
+ok   missing file -> None
+ok   synthetic ARW via exifread: SubSec '897' -> +0.897
+ok   junk ARW -> None
+
+--- stderr ---
+C:\Users\Louis\Pictures\DarkTable\Settings\Plugins\darktable-assisted-grouping\.venv\Lib\site-packages\PIL\TiffImagePlugin.py:982: UserWarning: Corrupt EXIF data.  Expecting to read 2 bytes but only got 0. 
+  warnings.warn(str(msg))
+Traceback (most recent call last):
+  File "C:\Users\Louis\Pictures\DarkTable\Settings\Plugins\darktable-assisted-grouping\python\test_exif_times.py", line 138, in <module>
+    run_tests()
+    ~~~~~~~~~^^
+  File "C:\Users\Louis\Pictures\DarkTable\Settings\Plugins\darktable-assisted-grouping\python\test_exif_times.py", line 119, in run_tests
+    os.makedirs(odd_dir)
+    ~~~~~~~~~~~^^^^^^^^^
+  File "<frozen os>", line 228, in makedirs
+OSError: [WinError 123] The filename, directory name, or volume label syntax is incorrect: 'C:\\Users\\Louis\\AppData\\Local\\Temp\\tmptwq_h0xd\\a, "b"'

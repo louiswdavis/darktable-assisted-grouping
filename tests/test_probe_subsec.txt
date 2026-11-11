@@ -1,0 +1,19 @@
+ok   subsec JPEG: SubSecTimeOriginal
+ok   subsec JPEG: DateTimeOriginal
+ok   subsec JPEG: SubSecDateTimeOriginal
+ok   no EXIF: all None
+ok   unreadable file: all None, no raise
+ok   synthetic ARW: Pillow cannot open it
+ok   synthetic ARW: exifread fallback reads it
+ok   synthetic ARW: SubSec padding stripped
+ok   synthetic ARW: empty SubSec -> None, no combination
+ok   exifread not installed: blanks, no raise
+ok   Pillow has date but no SubSec: exifread fills SubSec
+ok   Pillow has date, exifread finds nothing: Pillow's date kept
+ok   exifread raises: blanks, no raise
+ok   format_line: blanks where absent
+all tests passed
+
+--- stderr ---
+File format not recognized.
+File format not recognized.
