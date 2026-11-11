@@ -78,11 +78,11 @@ New-Item -ItemType SymbolicLink -Path "$env:LOCALAPPDATA\darktable\lua\contrib\a
 Add-Content "$env:LOCALAPPDATA\darktable\luarc" 'require "contrib/assisted_grouping"'
 ```
 
-Windows without Administrator rights or Developer Mode: copy `assisted_grouping.lua` into `%LOCALAPPDATA%\darktable\lua\contrib` instead of linking it, and add the same `luarc` line. Re-copy it after every update. The **plugin folder** preference (next step) still points the plugin at this repo for the Python side, and the plugin loads `plugin_common.lua` from that folder's `lua/` when the module is not beside the copied file (copy it too if you want darktable to start with the preference unset; the three plugins' copies are identical, so one copy in `contrib` serves all of them).
+Windows without Administrator rights or Developer Mode: copy `assisted_grouping.lua` into `%LOCALAPPDATA%\darktable\lua\contrib` instead of linking it, and add the same `luarc` line. Re-copy it after every update. The **plugins folder** preference (next step) still points the plugin at this repo for the Python side, and the plugin loads `plugin_common.lua` from that folder's `darktable-assisted-grouping/lua/` when the module is not beside the copied file (copy it too if you want darktable to start with the preference unset; the three plugins' copies are identical, so one copy in `contrib` serves all of them).
 
 ### 3. Point the plugin at the repo
 
-Start darktable, open **preferences → lua options**, and set **Assisted Grouping: plugin folder** to this repo's folder. From there the plugin finds `python/exif_times.py` and the `.venv` by itself. A folder without `python/exif_times.py` is an error. Set **Assisted Grouping: Python interpreter** only if your Python lives somewhere else. With neither set, the plugin first looks for an auto-detected `.venv` (in the repo folder it found `exif_times.py` in, or one level above the Lua files), and only then falls back to `python` (Windows) or `python3` on your `PATH`.
+Start darktable, open **preferences → lua options**, and set **plugins folder (holds the three assisted-* folders)** to the folder that holds `darktable-assisted-grouping` (and the other assisted plugins). From there the plugin finds `python/exif_times.py` and the `.venv` by itself. A folder whose `darktable-assisted-grouping` has no `python/exif_times.py` is an error. Set **Python interpreter (.venv)** only if your Python lives somewhere else. Both are shared by the assisted plugins; the older per-plugin **Assisted Grouping: plugin folder** and **Python interpreter** preferences still work, and the log says once to move them. With neither set, the plugin first looks for an auto-detected `.venv` (in the repo folder it found `exif_times.py` in, or one level above the Lua files), and only then falls back to `python` (Windows) or `python3` on your `PATH`.
 
 ## Using it
 
@@ -199,8 +199,8 @@ In **preferences → lua options**. Everything else is a panel setting saved wit
 
 | Preference | Default | What it does |
 |---|---|---|
-| Assisted Grouping: Python interpreter | empty | Python with Pillow and exifread. Empty = the repo's `.venv`, else `python`/`python3` on `PATH` |
-| Assisted Grouping: plugin folder | empty | This repo's folder (holds `python/` and `.venv`). Empty = auto-detect |
+| Python interpreter (.venv) (`assisted_plugins/python_bin`) | empty | Python with Pillow and exifread; shared by the assisted plugins. Empty = the repo's `.venv`, else `python`/`python3` on `PATH`. The old `assisted_grouping/python_bin` is still read and logged as deprecated |
+| plugins folder (`assisted_plugins/plugins_root`) | empty | The folder holding the assisted-* repos; this plugin uses `<plugins folder>/darktable-assisted-grouping` (holds `python/` and `.venv`). Empty = auto-detect. The old `assisted_grouping/plugin_folder` (this repo's folder) is still read and logged as deprecated |
 
 ## How it works
 
@@ -234,7 +234,7 @@ Capture times use a constant offset with no daylight saving (`isdst = false`), s
 
 - **The panel isn't there.** Start darktable with `-d lua` and look for `LUA ERROR` in the log. On Windows the log is `Documents\Darktable\darktable-log.txt`. A `module ... not found` error means darktable is loading an old copy of `assisted_grouping.lua`: re-link or re-copy it from this repo.
 - **Every run writes a log** to `assisted_grouping.log` in darktable's config directory (`%LOCALAPPDATA%\darktable\assisted_grouping.log` on Windows); the run before it is kept as `assisted_grouping.prev.log`. It has the run stamp and every setting, the timing line, the frame and group counts, how many photos the parent layer left unsplit, the tags attached and detached, the darktable groups made and skipped, every message shown on screen, and the helper's errors. Start here when a result looks wrong.
-- **"the plugin folder preference (…) has no python/exif_times.py."** Point the preference at the `darktable-assisted-grouping` folder, or clear it to auto-detect.
+- **"the plugins folder preference gives …, which has no python/exif_times.py."** Point the preference at the folder holding `darktable-assisted-grouping`, or clear it to auto-detect.
 - **The run always says whole-second.** Read the reason on the `timing:` line. If it names a RAW image, the helper couldn't read that RAW (check that `exifread` is installed in the interpreter, or select the JPEGs too). "exif_times.py stopped with exit code …" usually means the interpreter has no Pillow: install `python/requirements.txt` into it.
 - **"another job is still running."** Wait, or cancel it from the progress bar.
 - **"No selected photo has the tag …"** The tag layer matched nothing, so every photo is `not …`. Check the spelling and spaces against the tagging module (`Cars|Red`, not `Cars | Red`).
@@ -268,7 +268,7 @@ The darktable side has never run: it was written without darktable to test again
 
 1. **Install Python.** In the repo folder: `python -m venv .venv`, then `.venv\Scripts\pip install -r python\requirements.txt`. *Expect:* Pillow and exifread install with no errors.
 2. **Install the plugin** as in [Install](#2-darktable-side), linking **both** Lua files, and start darktable. *Expect:* an **Assisted Grouping** panel on the right in lighttable, with sections *1 start groups*, *2 divide groups*, *3 output* and *4 run* (with the partial-burst warning) and *tools*, each under its own heading. No `LUA ERROR` in the darktable log.
-3. **Set the plugin folder** in **preferences → lua options → Assisted Grouping: plugin folder** to the repo folder. *Expect:* the preference is saved; the panel's burst gap shows `2` on `template`.
+3. **Set the plugins folder** in **preferences → lua options → plugins folder (holds the three assisted-* folders)** to the folder holding the repo. *Expect:* the preference is saved; the panel's burst gap shows `2` on `template`.
 
 **First run (tags only)**
 
