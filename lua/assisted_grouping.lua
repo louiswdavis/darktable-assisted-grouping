@@ -573,6 +573,8 @@ M.PANEL_PAGES = {
     { number = 1, title = "start groups", keys = { "timing", "burst_gap_seconds", "refine" } },
     { number = 2, title = "divide groups", keys = { "camera", "tag", "parent" } },
     { number = 3, title = "output", keys = { "native_groups", "write_tags" } },
+    { number = 4, title = "run", keys = {} },
+    { number = 5, title = "tools", keys = {} },
 }
 M.PANEL_OTHER_KEYS = {}
 M.ERR_NO_LAYER = "turn on at least one layer (burst timing, camera and lens, tag or parent tag), or Refine existing groups"
@@ -1555,7 +1557,6 @@ end
 
 local preset_file_store, make_preset_controls = C.preset_file_store, C.make_preset_controls
 
-local step_label, make_section = C.step_label, C.make_section
 
 -- Panel -----------------------------------------------------------------------
 
@@ -1730,6 +1731,8 @@ local function install_panel()
             parent_entry,
         },
         { native_check, tags_check },
+        { group_button },
+        { clear_button, pairs_button },
     }
     local pages = {}
     for i, page in ipairs(M.PANEL_PAGES) do
@@ -1744,10 +1747,7 @@ local function install_panel()
         end,
         ctl.widget,
         C.paged_sections("assisted_grouping", pages),
-        step_label(4, "run"),
-        group_button,
-        warning_label,
-        make_section(nil, "tools", { clear_button, pairs_button }),
+        warning_label, -- below the pages so it shows whichever is open
     }
 
     dt.register_lib(

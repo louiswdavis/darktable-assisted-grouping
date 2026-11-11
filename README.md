@@ -88,6 +88,8 @@ Start darktable, open **preferences → lua options**, and set **plugins folder 
 
 Select the photos in lighttable, pick the layers and outputs in the **Assisted Grouping** panel (right side), and click **Group selection**. A progress bar appears in darktable's job area; its cancel button stops the run (see [Cancel](#cancel)). When it finishes, the message line says how many images ended up in how many groups, whether timing was sub-second or whole-second, and the run's stamp. Instead of the timing it says "timing off" when Burst timing is off, or "no timing needed" when Refine already grouped every dated frame; capture times aren't read in either case.
 
+Running all three plugins? [WORKFLOW.md](WORKFLOW.md) says which order to pick and what to re-run after what.
+
 Select **whole bursts, or the whole shoot**. Bursts are built from the selected frames only, so selecting part of a burst splits it. The panel shows this warning permanently.
 
 ### What you get
@@ -155,7 +157,7 @@ The **preset** picker at the top of the panel saves every panel setting (the lay
 
 ## Panel options
 
-Below the [preset](#presets) picker a **page** combobox picks one of **1 start groups**, **2 divide groups** and **3 output** to show at a time; the last page picked is remembered across restarts. **4 run** and **tools** stay below the page, always shown. darktable's reset button (↺ in the panel header) puts every setting back to the template defaults; nothing is saved until you update a preset.
+Below the [preset](#presets) picker are the page buttons **1 start groups ▸**, **2 divide groups ▸**, **3 output ▸**, **4 run ▸** and **5 tools ▸**: clicking one opens its contents below it (its label ends in **▾**) and folds the others; clicking the open one folds it. The open page is remembered across restarts. The partial-burst warning sits below the pages, shown whichever page is open. darktable's reset button (↺ in the panel header) puts every setting back to the template defaults; nothing is saved until you update a preset.
 
 Layers run in a fixed order, and each one only divides the groups the one before produced; none merges.
 
@@ -186,7 +188,7 @@ At least one output must be on, or the run refuses: "turn on at least one output
 
 - **Group selection.** Runs the layers on the selected photos. The partial-burst warning sits under it.
 
-### tools
+### 5 tools
 
 - **Clear grouping marks.** Removes the plugin's tags and darktable groups from the selected photos (see [Re-running and clearing](#re-running-and-clearing)).
 - **Reset to RAW+JPEG pairs.** Ungroups the selected photos and their groups, then stacks each RAW with its JPEG again. Tags stay.
@@ -267,7 +269,7 @@ The darktable side has never run: it was written without darktable to test again
 **Setup**
 
 1. **Install Python.** In the repo folder: `python -m venv .venv`, then `.venv\Scripts\pip install -r python\requirements.txt`. *Expect:* Pillow and exifread install with no errors.
-2. **Install the plugin** as in [Install](#2-darktable-side), linking **both** Lua files, and start darktable. *Expect:* an **Assisted Grouping** panel on the right in lighttable, with a **page** combobox showing one of *1 start groups* to *3 output*, then *4 run* (with the partial-burst warning) and *tools*. No `LUA ERROR` in the darktable log.
+2. **Install the plugin** as in [Install](#2-darktable-side), linking **both** Lua files, and start darktable. *Expect:* an **Assisted Grouping** panel on the right in lighttable, with the page buttons *1 start groups ▾* (open, its settings below it) to *5 tools ▸*; opening *4 run* shows the **Group selection** button, and the partial-burst warning sits below the pages. No `LUA ERROR` in the darktable log.
 3. **Set the plugins folder** in **preferences → lua options → plugins folder (holds the three assisted-* folders)** to the folder holding the repo. *Expect:* the preference is saved; the panel's burst gap shows `2` on `template`.
 
 **First run (tags only)**
