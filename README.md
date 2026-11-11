@@ -267,7 +267,7 @@ The darktable side has never run: it was written without darktable to test again
 **Setup**
 
 1. **Install Python.** In the repo folder: `python -m venv .venv`, then `.venv\Scripts\pip install -r python\requirements.txt`. *Expect:* Pillow and exifread install with no errors.
-2. **Install the plugin** as in [Install](#2-darktable-side), linking **both** Lua files, and start darktable. *Expect:* an **Assisted Grouping** panel on the right in lighttable, with sections *1 start groups*, *2 divide groups*, *3 output* and *4 run* (with the partial-burst warning) and *tools*, each under its own heading. No `LUA ERROR` in the darktable log.
+2. **Install the plugin** as in [Install](#2-darktable-side), linking **both** Lua files, and start darktable. *Expect:* an **Assisted Grouping** panel on the right in lighttable, with a **page** combobox showing one of *1 start groups* to *3 output*, then *4 run* (with the partial-burst warning) and *tools*. No `LUA ERROR` in the darktable log.
 3. **Set the plugins folder** in **preferences → lua options → plugins folder (holds the three assisted-* folders)** to the folder holding the repo. *Expect:* the preference is saved; the panel's burst gap shows `2` on `template`.
 
 **First run (tags only)**
