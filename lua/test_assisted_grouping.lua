@@ -18,7 +18,7 @@ end
 -- plugin_common.lua ---------------------------------------------------------------
 -- The same file in all three plugin repos; COMMON_HASH pins it. After changing it, copy it to the
 -- other two repos and put the hash this prints into their tests too.
-local COMMON_HASH = "5b5b2bf3"
+local COMMON_HASH = "ee1de49c"
 local PC = dofile(script_dir .. "/plugin_common.lua")
 local function fnv1a(text)
     local h = 2166136261
@@ -691,6 +691,13 @@ local pd = A.preset_defaults(A.PRESET_SCHEMA)
 check("preset schema: defaults", string.format("%s %s %s [%s] [%s] %s %s %s", pd.burst_gap_seconds, pd.timing, pd.camera,
     pd.tag, pd.parent, pd.refine, pd.native_groups, pd.write_tags), "2 true false [] [] false true false")
 check("preset schema: decimal gap kept", A.preset_merge(A.PRESET_SCHEMA, A.preset_decode('{"burst_gap_seconds": 0.5}')).burst_gap_seconds, 0.5)
+local page_missing, page_duplicate = PC.page_coverage(A.PANEL_PAGES, A.PANEL_OTHER_KEYS, A.PRESET_SCHEMA)
+check("PANEL_PAGES: every preset key is on one page or listed off-stack",
+    table.concat(page_missing, " ") .. table.concat(page_duplicate, " "), "")
+local page_titles = {}
+for _, p in ipairs(A.PANEL_PAGES) do page_titles[#page_titles + 1] = p.title end
+check("PANEL_PAGES: titles match the README sections", table.concat(page_titles, ","),
+    "start groups,divide groups,output")
 
 -- summary --------------------------------------------------------------------
 if failures > 0 then

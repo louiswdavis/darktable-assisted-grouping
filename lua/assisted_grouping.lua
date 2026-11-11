@@ -567,6 +567,14 @@ M.PRESET_SCHEMA = {
     { key = "native_groups", kind = "bool", default = true },
     { key = "write_tags", kind = "bool", default = false },
 }
+
+-- The panel's pages and the preset keys each page's widgets edit (C.page_coverage checks them).
+M.PANEL_PAGES = {
+    { number = 1, title = "start groups", keys = { "timing", "burst_gap_seconds", "refine" } },
+    { number = 2, title = "divide groups", keys = { "camera", "tag", "parent" } },
+    { number = 3, title = "output", keys = { "native_groups", "write_tags" } },
+}
+M.PANEL_OTHER_KEYS = {}
 M.ERR_NO_LAYER = "turn on at least one layer (burst timing, camera and lens, tag or parent tag), or Refine existing groups"
 
 -- p = { timing, gap_text, camera, tag, parent, refine, write_tags, native_groups } as
@@ -1707,6 +1715,27 @@ local function install_panel()
         allow_store_new = true,
     })
 
+    local page_widgets = {
+        {
+            timing_check,
+            dt.new_widget("label") { label = "burst gap (seconds)", halign = "start" },
+            gap_entry,
+            refine_check,
+        },
+        {
+            camera_check,
+            dt.new_widget("label") { label = "by tag", halign = "start" },
+            tag_entry,
+            dt.new_widget("label") { label = "by child of tag", halign = "start" },
+            parent_entry,
+        },
+        { native_check, tags_check },
+    }
+    local pages = {}
+    for i, page in ipairs(M.PANEL_PAGES) do
+        pages[i] = { number = page.number, title = page.title, widgets = page_widgets[i] }
+    end
+
     local panel_box = dt.new_widget("box") {
         orientation = "vertical",
         reset_callback = function()
@@ -1714,20 +1743,7 @@ local function install_panel()
             changed()
         end,
         ctl.widget,
-        make_section(1, "start groups", {
-            timing_check,
-            dt.new_widget("label") { label = "burst gap (seconds)", halign = "start" },
-            gap_entry,
-            refine_check,
-        }),
-        make_section(2, "divide groups", {
-            camera_check,
-            dt.new_widget("label") { label = "by tag", halign = "start" },
-            tag_entry,
-            dt.new_widget("label") { label = "by child of tag", halign = "start" },
-            parent_entry,
-        }),
-        make_section(3, "output", { native_check, tags_check }),
+        C.paged_sections("assisted_grouping", pages),
         step_label(4, "run"),
         group_button,
         warning_label,
