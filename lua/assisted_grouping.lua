@@ -1882,7 +1882,15 @@ local function install_panel()
         local text = raw_read(name)
         if not text then return nil end
         local upgraded, notes = M.upgrade_preset_text(text)
-        for _, note in ipairs(notes or {}) do log(note); flush_log() end
+        -- saved back, so the upgrade (and its log lines) happens once
+        if upgraded ~= text then
+            if store.write(name, upgraded) then
+                for _, note in ipairs(notes or {}) do log(note) end
+            else
+                log("preset " .. name .. ": couldn't save the upgraded preset to " .. store.path(name))
+            end
+            flush_log()
+        end
         return upgraded
     end
 
