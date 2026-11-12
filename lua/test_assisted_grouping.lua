@@ -273,16 +273,20 @@ local pair = A.collapse({
     { id = 11, dir = "/p", filename = "IMG_1.JPG", epoch = 0, model = "a", tags = {} },
     { id = 12, dir = "/p", filename = "IMG_2.JPG", epoch = 50, tags = {} },
 })
-local pair_opts = { gap = 2, camera = true, tag = "Cars|Red", parent = "Cars|Number" }
+local pair_opts = { gap = 2, camera = true, tag = "Cars|Red", parent = "Cars|Number", trace = true }
 local pair_result = A.run_layers(pair, pair_opts)
 local wanted = A.wanted_tags(pair, pair_result, STAMP, pair_opts)
 check("wanted_tags: both members of a pair get the same set", keys(wanted[10]), keys(wanted[11]))
-check("wanted_tags: pair carries every layer's tag", keys(wanted[10]),
+check("wanted_tags: trace on writes the layer trace tags", keys(wanted[10]),
     "Assisted Grouping|2026-11-08 22:45:10|Burst|0001 + Assisted Grouping|2026-11-08 22:45:10|Camera|a"
     .. " + Assisted Grouping|2026-11-08 22:45:10|Group|0001 + Assisted Grouping|2026-11-08 22:45:10|Parent|7"
     .. " + Assisted Grouping|2026-11-08 22:45:10|Tag|has Red")
 check("wanted_tags: absent tag and child read not/none", wanted[12]["Assisted Grouping|2026-11-08 22:45:10|Tag|not Red"]
     and wanted[12]["Assisted Grouping|2026-11-08 22:45:10|Parent|none"], true)
+local untraced_opts = { gap = 2, camera = true, tag = "Cars|Red", parent = "Cars|Number", trace = false }
+local untraced = A.wanted_tags(pair, A.run_layers(pair, untraced_opts), STAMP, untraced_opts)
+check("wanted_tags: trace off writes Group only", keys(untraced[10]),
+    "Assisted Grouping|2026-11-08 22:45:10|Group|0001")
 local plain = A.wanted_tags(pair, A.run_layers(pair, { gap = 2 }), STAMP, { gap = 2 })
 check("wanted_tags: timing alone writes Group only (Burst would be identical)", keys(plain[12]),
     "Assisted Grouping|2026-11-08 22:45:10|Group|0002")
@@ -444,7 +448,7 @@ check("run_layers alone: result.timing is false", alone_run.timing, false)
 local alone_empty = A.run_layers(alone_units, { alone = true, base_of = {} })
 check("run_layers alone: empty base_of gives one group per unit",
     alone_empty.burst_of[1] .. alone_empty.burst_of[2] .. alone_empty.burst_of[3] .. alone_empty.burst_of[4], "1234")
-local no_burst = A.wanted_tags(pair, A.run_layers(pair, { timing = false }), STAMP, {})
+local no_burst = A.wanted_tags(pair, A.run_layers(pair, { timing = false }), STAMP, { trace = true })
 check("wanted_tags: timing off writes no Burst tag", keys(no_burst[12]),
     "Assisted Grouping|2026-11-08 22:45:10|Group|0001")
 
@@ -492,7 +496,7 @@ check("start_from_of: refine wins", A.start_from_of(true, true), "tags")
 check("start_from_of: timing off", A.start_from_of(false, false), "one")
 check("start_from_of: nil keys default to time", A.start_from_of(nil, nil), "time")
 
-local function upgraded(text) return A.preset_merge(A.PRESET_SCHEMA, A.preset_decode(A.upgrade_preset_text(text))) end
+local function upgraded(text) return A.preset_merge(A.PRESET_SCHEMA, A.preset_decode((A.upgrade_preset_text(text)))) end
 check("upgrade_preset_text: timing=false, refine=true loads as tags",
     (upgraded('{"version": 1, "timing": false, "refine": true}')).start_from, "tags")
 check("upgrade_preset_text: both on loads as tags",
@@ -504,6 +508,26 @@ check("upgrade_preset_text: empty object loads as time", empty_s.start_from .. "
 local has_start = '{"version": 1, "start_from": "one"}'
 check("upgrade_preset_text: start_from present is returned unchanged", A.upgrade_preset_text(has_start), has_start)
 check("upgrade_preset_text: undecodable text is returned unchanged", A.upgrade_preset_text("not json"), "not json")
+
+local up_on, up_on_notes = A.upgrade_preset_text('{"write_tags":true}')
+check("upgrade_preset_text: write_tags true turns trace_tags on", A.preset_decode(up_on).trace_tags, true)
+check("upgrade_preset_text: write_tags true notes one line", up_on_notes and #up_on_notes, 1)
+local _, up_off_notes = A.upgrade_preset_text('{"write_tags":false}')
+check("upgrade_preset_text: write_tags false leaves trace_tags default",
+    (upgraded('{"write_tags":false}')).trace_tags, false)
+check("upgrade_preset_text: write_tags false has no note", up_off_notes, nil)
+local kept = '{"write_tags":true,"trace_tags":false,"start_from":"time"}'
+local kept_text, kept_notes = A.upgrade_preset_text(kept)
+check("upgrade_preset_text: trace_tags present is kept", kept_text .. tostring(kept_notes), kept .. "nil")
+local json_text, json_notes = A.upgrade_preset_text("not json")
+check("upgrade_preset_text: undecodable text has no notes", tostring(json_notes), "nil")
+local kinds = {}
+for _, k in ipairs(A.TAG_KINDS) do kinds[k.kind] = true end
+local toggles_ok = true
+for _, t in ipairs(A.TAG_TOGGLES) do if not kinds[t.kind] then toggles_ok = false end end
+check("TAG_TOGGLES: every row has a kind in TAG_KINDS", toggles_ok, true)
+check("NOTICE_TAGS_OFF names Group tags", A.NOTICE_TAGS_OFF,
+    "turn on Group tags, or the next run finds no group tags to start from")
 
 check("panel_notice: fine is empty", A.panel_notice(panel()), "")
 check("panel_notice: both outputs off", A.panel_notice(panel({ write_tags = false, native_groups = false })), A.ERR_NO_OUTPUT)
@@ -634,7 +658,7 @@ local refine_units = A.collapse({
     { id = 1, dir = "/r", filename = "A.JPG", epoch = 0, tags = { [newer] = true } },
     { id = 2, dir = "/r", filename = "B.JPG", epoch = 100, tags = {} },
 })
-local refine_opts = { gap = 2, base_of = A.base_of_from_tags(refine_units) }
+local refine_opts = { gap = 2, trace = true, base_of = A.base_of_from_tags(refine_units) }
 local refine_wanted = A.wanted_tags(refine_units, A.run_layers(refine_units, refine_opts), STAMP, refine_opts)
 check("wanted_tags: Refine alone writes Group only", keys(refine_wanted[2]),
     "Assisted Grouping|2026-11-08 22:45:10|Group|0002")

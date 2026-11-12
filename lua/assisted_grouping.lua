@@ -303,7 +303,8 @@ local function last_segment(tag)
     return tag:match("([^|]*)$")
 end
 
--- opts as for run_layers; a layer counts as run when its map is in `result`.
+-- opts as for run_layers, plus trace: the Burst/Camera/Tag/Parent names are written only
+-- when it is true. A layer counts as run when its map is in `result`.
 function M.wanted_tags(units, result, stamp, opts)
     local wanted = {}
     local child_of = opts.parent and M.parent_key(opts.parent)
@@ -311,18 +312,18 @@ function M.wanted_tags(units, result, stamp, opts)
     for _, unit in ipairs(units) do
         local set = {}
         set[M.group_tag(stamp, "Group", result.final_of[unit.id])] = true
-        if result.timing ~= false and result.final_of ~= result.burst_of then
+        if opts.trace and result.timing ~= false and result.final_of ~= result.burst_of then
             set[M.group_tag(stamp, "Burst", result.burst_of[unit.id])] = true
         end
-        if result.camera_of then
+        if opts.trace and result.camera_of then
             local cam = M.camera_key(unit)
             set[M.group_tag(stamp, "Camera", nil, cam ~= "" and cam or "unknown")] = true
         end
-        if result.tag_of then
+        if opts.trace and result.tag_of then
             local prefix = unit.tags[opts.tag] and "has " or "not "
             set[M.group_tag(stamp, "Tag", nil, prefix .. tag_label)] = true
         end
-        if result.parent_of then
+        if opts.trace and result.parent_of then
             local child = child_of(unit)
             child = child and M.sanitize(child) or ""
             set[M.group_tag(stamp, "Parent", nil, child ~= "" and child or "none")] = true
@@ -578,19 +579,31 @@ M.PRESET_SCHEMA = {
     { key = "parent", kind = "string", default = "" },
     { key = "native_groups", kind = "bool", default = true },
     { key = "write_tags", kind = "bool", default = false },
+    { key = "trace_tags", kind = "bool", default = false },
 }
 
 -- The panel's pages and the preset keys each page's widgets edit (C.page_coverage checks them).
 M.PANEL_PAGES = {
     { number = 1, title = "start groups", keys = { "start_from", "burst_gap_seconds" } },
     { number = 2, title = "divide groups", keys = { "camera", "tag", "parent" } },
-    { number = 3, title = "output", keys = { "native_groups", "write_tags" } },
+    { number = 3, title = "output", keys = { "native_groups", "write_tags", "trace_tags" } },
     { number = 4, title = "run", keys = {} },
     { number = 5, title = "tools", keys = {} },
 }
 M.PANEL_OTHER_KEYS = {}
+
+-- Tag switches by kind, for the tests and the README; the panel places its widgets by hand.
+M.TAG_TOGGLES = {
+    { key = "write_tags", label = "Group tags", kind = "output", writes = { "Group" } },
+    { key = "trace_tags", label = "Layer trace tags", kind = "diag", writes = { "Burst", "Camera", "Tag", "Parent" } },
+}
+M.TAG_KINDS = {
+    { kind = "output", label = "outputs" },
+    { kind = "check", label = "checks" },
+    { kind = "diag", label = "how it decided" },
+}
 M.ERR_NO_LAYER = "turn on at least one divide layer (camera and lens, tag or parent tag), or start from capture time or last run's groups"
-M.NOTICE_TAGS_OFF = "turn on Write group tags, or the next run finds no group tags to start from"
+M.NOTICE_TAGS_OFF = "turn on Group tags, or the next run finds no group tags to start from"
 M.NOTICE_NO_LAYER = "turn on at least one divide layer"
 
 -- Maps the pre-start_from preset keys to a start_from value; refine wins over timing.
@@ -600,13 +613,25 @@ function M.start_from_of(timing, refine)
     return "time"
 end
 
--- Returns preset text that holds start_from, derived from the old timing/refine keys
--- when absent; text that does not decode or already has start_from comes back unchanged.
+-- Returns preset text that holds start_from (derived from the old timing/refine keys when
+-- absent) and trace_tags (on when write_tags was on), plus a list of log lines for what
+-- changed, nil when nothing did. Text that does not decode comes back unchanged.
 function M.upgrade_preset_text(text)
     local decoded = C.preset_decode(text)
-    if not decoded or decoded.start_from ~= nil then return text end
-    decoded.start_from = M.start_from_of(decoded.timing, decoded.refine)
-    return C.preset_encode(M.PRESET_SCHEMA, decoded)
+    if not decoded then return text end
+    local notes
+    local changed = false
+    if decoded.start_from == nil then
+        decoded.start_from = M.start_from_of(decoded.timing, decoded.refine)
+        changed = true
+    end
+    if decoded.trace_tags == nil and decoded.write_tags == true then
+        decoded.trace_tags = true
+        notes = { "preset upgraded: trace_tags set from write_tags (layer trace tags are now their own switch)" }
+        changed = true
+    end
+    if not changed then return text end
+    return C.preset_encode(M.PRESET_SCHEMA, decoded), notes
 end
 
 local function has_layer(p)
@@ -618,7 +643,7 @@ local function layers_of(p)
     return p.start_from == "time", p.start_from == "tags"
 end
 
--- p = { start_from, gap_text, camera, tag, parent, write_tags, native_groups } as
+-- p = { start_from, gap_text, camera, tag, parent, write_tags, trace_tags, native_groups } as
 -- the panel reads them. Returns group_images options (blank tag/parent → nil, a
 -- trailing `|` on the parent dropped), or nil and why the run can't start.
 function M.panel_options(p)
@@ -636,6 +661,7 @@ function M.panel_options(p)
         parent = parent ~= "" and parent or nil,
         refine = refine,
         write_tags = p.write_tags and true or false,
+        trace_tags = p.trace_tags and true or false,
         native_groups = p.native_groups and true or false,
     }
     if not has_layer(p) then
@@ -1324,7 +1350,7 @@ local function count_parent_unsplit(units, parent)
     return n
 end
 
--- opts = { timing, gap, camera, tag, parent, refine, write_tags, native_groups }, as
+-- opts = { timing, gap, camera, tag, parent, refine, write_tags, trace_tags, native_groups }, as
 -- M.panel_options returns them.
 function M.group_images(images, opts)
     if busy then
@@ -1355,7 +1381,7 @@ function M.group_images(images, opts)
         local records = M.build_images(images, M.needs_tags(opts))
         local units = M.collapse(records)
         local layer_opts = { gap = opts.gap, timing = opts.timing, camera = opts.camera, tag = opts.tag,
-            parent = opts.parent }
+            parent = opts.parent, trace = opts.trace_tags }
         if opts.refine then layer_opts.base_of = M.base_of_from_tags(units) end
 
         -- Only frames the burst layer times need the helper.
@@ -1533,7 +1559,7 @@ end
 
 -- Reset to RAW+JPEG pairs: takes the selection, and everything grouped with it, out
 -- of its darktable groups, then groups each frame's files again (M.plan_pairs).
--- Burst and group tags stay, so the plugin's groups come back with Group selection.
+-- Group tags stay, so the plugin's groups come back with Group selection.
 -- Hand-made groups are reset too. The ledger forgets the plugin's native groups here.
 function M.reset_to_pairs(images)
     if busy then
@@ -1625,7 +1651,7 @@ function M.browse_bursts(images)
         local base_of = M.base_of_from_tags(units)
         start_log("bursts", #records)
         if next(base_of) == nil then
-            say("Assisted Grouping: no group tags: run Group selection with Write group tags on")
+            say("Assisted Grouping: no group tags: run Group selection with Group tags on")
             return
         end
         local result = M.run_layers(units, { alone = true, base_of = base_of })
@@ -1731,8 +1757,14 @@ local function install_panel()
         clicked_callback = function() changed(); refresh_notice() end,
     }
     local tags_check = dt.new_widget("check_button") {
-        label = "Write group tags",
-        tooltip = "Tag each photo under Assisted Grouping|<run time>|... with its group and each layer's result. Adds time on a large selection.",
+        label = "Group tags",
+        tooltip = "Tag each photo with its Group under Assisted Grouping|<run time>|Group|... One tag per final group. Needed for last run's groups and browse as bursts.",
+        value = false,
+        clicked_callback = function() changed(); refresh_notice() end,
+    }
+    local trace_check = dt.new_widget("check_button") {
+        label = "Layer trace tags",
+        tooltip = "Also write the Burst, Camera, Tag and Parent tags that show which layer split each group. Written only when Group tags is on. Off by default; slower on a large selection.",
         value = false,
         clicked_callback = function() changed(); refresh_notice() end,
     }
@@ -1745,6 +1777,7 @@ local function install_panel()
             tag = tag_entry.text,
             parent = parent_entry.text,
             write_tags = tags_check.value,
+            trace_tags = trace_check.value,
             native_groups = native_check.value,
         }
     end
@@ -1771,6 +1804,7 @@ local function install_panel()
             parent = parent_entry.text,
             native_groups = native_check.value,
             write_tags = tags_check.value,
+            trace_tags = trace_check.value,
         }
     end
 
@@ -1786,6 +1820,7 @@ local function install_panel()
         parent_entry.text = s.parent
         native_check.value = s.native_groups
         tags_check.value = s.write_tags
+        trace_check.value = s.trace_tags
         refresh_notice()
     end
 
@@ -1824,7 +1859,7 @@ local function install_panel()
     }
     local bursts_button = dt.new_widget("button") {
         label = "bursts",
-        tooltip = "Put the selected photos back into their burst groups from the latest run's group tags. No capture times are read. Run Group selection with Write group tags on first.",
+        tooltip = "Put the selected photos back into their burst groups from the latest run's group tags. No capture times are read. Run Group selection with Group tags on first.",
         clicked_callback = function()
             local images = copy_images(dt.gui.action_images)
             if queue_if_busy("browse as bursts", #images > 0, function() M.browse_bursts(images) end) then return end
@@ -1833,7 +1868,7 @@ local function install_panel()
     }
     local pairs_button = dt.new_widget("button") {
         label = "pairs",
-        tooltip = "Take the selected photos, and everything grouped with them, out of their darktable groups, then stack each RAW with its JPEG again, as at import. Hand-made groups are reset too. Burst tags stay, so Group selection brings the burst groups back.",
+        tooltip = "Take the selected photos, and everything grouped with them, out of their darktable groups, then stack each RAW with its JPEG again, as at import. Hand-made groups are reset too. Group tags stay, so Group selection brings the burst groups back.",
         clicked_callback = function()
             local images = copy_images(dt.gui.action_images)
             if queue_if_busy("browse as pairs", #images > 0, function() M.reset_to_pairs(images) end) then return end
@@ -1845,7 +1880,10 @@ local function install_panel()
     local raw_read = store.read
     store.read = function(name)
         local text = raw_read(name)
-        return text and M.upgrade_preset_text(text)
+        if not text then return nil end
+        local upgraded, notes = M.upgrade_preset_text(text)
+        for _, note in ipairs(notes or {}) do log(note); flush_log() end
+        return upgraded
     end
 
     ctl = make_preset_controls({
@@ -1869,7 +1907,13 @@ local function install_panel()
             dt.new_widget("label") { label = "Parent tag", halign = "start" },
             parent_entry,
         },
-        { native_check, tags_check },
+        {
+            dt.new_widget("section_label") { label = "outputs" },
+            native_check,
+            tags_check,
+            dt.new_widget("section_label") { label = "how it decided" },
+            trace_check,
+        },
         {
             group_button,
             dt.new_widget("box") {

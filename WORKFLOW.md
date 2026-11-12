@@ -26,7 +26,7 @@ Caches keep detections, OCR, embeddings and sharpness per frame, so a re-run is 
 
 **browse as pairs** in grouping and darktable's own grouping toggle both break native groups. Tags survive both, and **browse as bursts** restores the groups from the tags without Python. Three settings:
 
-- Grouping: **Write group tags** on; save as your rally preset in the grouping panel.
+- Grouping: **Group tags** on; save as your rally preset in the grouping panel.
 - Tagging collection: **grouping support** = Grouping tags, node blank (newest run).
 - Culling: **grouping support** = Grouping tags, node blank; **car tag node** = the collection prefix; save as your rally preset in the culling panel. The car tag node splits per car for number-only entries and per team for `team|name` entries, until ticket 15.
 
@@ -36,6 +36,6 @@ Native groups stay the template default for other shoot types.
 
 | Plugin | Writes | Reads from the others |
 |---|---|---|
-| Grouping | darktable groups; `Assisted Grouping\|<stamp>\|Group\|NNNN` (+ Burst, Camera, Tag, Parent layers) when **Write group tags** is on | any tag, via its **Tag** and **Parent tag** layers (e.g. tagging's `Rally\|2026` as the parent node) |
+| Grouping | darktable groups; `Assisted Grouping\|<stamp>\|Group\|NNNN` (+ Burst, Camera, Tag, Parent with **Layer trace tags**) when **Group tags** is on | any tag, via its **Tag** and **Parent tag** layers (e.g. tagging's `Rally\|2026` as the parent node) |
 | Tagging | `<prefix>\|<number>` entry tags, `Assisted Tagging\|Colour\|<name>`, `Assisted Tagging\|Identification\|…` diagnostics | groups: native darktable groups (default) or `Assisted Grouping\|<stamp>\|Group` tags, for burst consensus |
 | Culling | stars; `Assisted Culling\|Keeper`, `Rejected`, flags, `Why\|…` | groups, the same two ways; car identity from the **car tag node** |
