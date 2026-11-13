@@ -82,7 +82,7 @@ Windows without Administrator rights or Developer Mode: copy `assisted_grouping.
 
 ### 3. Point the plugin at the repo
 
-Start darktable, open **preferences → lua options**, and set **plugins folder (holds the three assisted-* folders)** to the folder that holds `darktable-assisted-grouping` (and the other assisted plugins). From there the plugin finds `python/exif_times.py` and the `.venv` by itself. A folder whose `darktable-assisted-grouping` has no `python/exif_times.py` is an error. Set **Python interpreter (.venv)** only if your Python lives somewhere else. Both are shared by the assisted plugins; the older per-plugin **Assisted Grouping: plugin folder** and **Python interpreter** preferences still work, and the log says once to move them. With neither set, the plugin first looks for an auto-detected `.venv` (in the repo folder it found `exif_times.py` in, or one level above the Lua files), and only then falls back to `python` (Windows) or `python3` on your `PATH`.
+Start darktable, open **preferences → lua options**, and set **plugins folder (holds the three assisted-* folders)** to the folder that holds `darktable-assisted-grouping` (and the other assisted plugins). From there the plugin finds `python/exif_times.py` and the `.venv` by itself. A folder whose `darktable-assisted-grouping` has no `python/exif_times.py` is an error. The preference is shared by the assisted plugins; the older per-plugin **Assisted Grouping: plugin folder** preference still works, and the log says once to move it. There is no interpreter preference, because each assisted plugin has different requirements: the plugin looks for its own `.venv` (in the repo folder it found `exif_times.py` in, or one level above the Lua files), and only then falls back to `python` (Windows) or `python3` on your `PATH`.
 
 ## Using it
 
@@ -208,7 +208,6 @@ In **preferences → lua options**. Everything else is a panel setting saved wit
 
 | Preference | Default | What it does |
 |---|---|---|
-| Python interpreter (.venv) (`assisted_plugins/python_bin`) | empty | Python with Pillow and exifread; shared by the assisted plugins. Empty = the repo's `.venv`, else `python`/`python3` on `PATH`. The old `assisted_grouping/python_bin` is still read and logged as deprecated |
 | plugins folder (`assisted_plugins/plugins_root`) | empty | The folder holding the assisted-* repos; this plugin uses `<plugins folder>/darktable-assisted-grouping` (holds `python/` and `.venv`). Empty = auto-detect. The old `assisted_grouping/plugin_folder` (this repo's folder) is still read and logged as deprecated |
 
 ## How it works

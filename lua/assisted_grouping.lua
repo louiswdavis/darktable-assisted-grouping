@@ -1059,9 +1059,6 @@ local function plugin_root(script)
 end
 
 local function python_bin(script)
-    local pref = C.python_bin(dt, "assisted_grouping", log)
-    if pref ~= "" then return pref end
-
     local root = plugin_root(script)
     local found = first_existing({
         root .. "/.venv/Scripts/python.exe",
