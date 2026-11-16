@@ -1,0 +1,289 @@
+FAIL plugin_common.lua matches COMMON_HASH (copy it to the other repos after a change): got 503716c8, want 069ea47d
+ok   shell_quote: Windows escapes quotes, keeps %
+ok   shell_quote: POSIX escapes single quotes
+ok   parse_csv_line: quoted comma and doubled quote
+ok   parse_csv_line: wrong field count is nil
+ok   lead_rank: full-size JPEG beats RAW
+ok   temp_base: <dir>/<prefix><epoch>_<seq>_
+ok   sweep_temp: removes only this prefix's stale files
+ok   sweep_temp: newer file kept
+ok   sweep_temp: other prefix kept
+ok   parses a normal timestamp
+ok   returns nil for missing timestamp
+ok   returns nil for garbage input
+ok   returns nil for an all-zero date
+ok   returns nil for a pre-1970 date
+ok   normal date unchanged by the pre-1970 guard
+ok   zero-dated frame is kept
+ok   zero-dated frame is its own group
+ok   dated neighbours still share a burst
+ok   RAW+JPEG pair and a single give 2 units
+ok   pair unit has 2 members
+ok   pair unit id is the lowest member id
+ok   pair unit tags are the union
+ok   single unit keeps its id
+ok   extension case ignored, other dir kept apart
+ok   same path twice gives 1 unit
+ok   duplicate unit has 2 members
+ok   sub-second frames share group 1
+ok   frame past the gap is group 2
+ok   gap exactly 2 stays in the group
+ok   gap 2.01 splits
+ok   equal epochs share a group
+ok   timed units come first
+ok   untimed units get distinct numbers after the timed ones
+ok   untimed numbering follows id order
+ok   all-untimed input yields one group per unit
+ok   single unit yields group 1
+ok   single unit yields exactly one entry
+ok   0.1 and 2.1 with gap 2 stay together (float tolerance)
+ok   0.1 and 2.2 with gap 2 split
+ok   2.4 and 4.4 with gap 2 stay together (float tolerance)
+ok   real epochs exactly 1.5 apart with gap 1.5 stay together
+ok   real epochs 1.6 apart with gap 1.5 split
+ok   real epochs exactly 0.1 apart with gap 0.1 stay together
+ok   JPEG-only half of a pair gives a 1-member unit
+ok   JPEG-only half of a pair still clusters
+ok   sanitize collapses and trims
+ok   camera_key joins maker model lens
+ok   camera_key strips | ; , and "
+ok   camera_key keeps the rest of a dirty lens
+ok   camera_key with missing fields has no stray spaces
+ok   divide by camera: units 1 and 3 together
+ok   divide by camera: unit 2 apart
+ok   divide by camera: dense numbering
+ok   divide numbers by old group then first appearance
+ok   tag_key matches an exact tag
+ok   tag_key: untagged is 0
+ok   tag_key: child tag does not match its parent
+ok   tag_key splits tagged from untagged
+ok   parent_key: one child gives that child
+ok   parent_key: no child gives nil
+ok   parent_key: two children give nil
+ok   parent_key: grandchild is not a direct child
+ok   parent divide: two children split
+ok   parent divide: nil-key unit stays with the group's first part
+ok   parent divide: nil key forms no extra group
+ok   parent divide: all-nil group stays one group
+ok   all layers off: final_of is burst_of
+ok   all layers off: other layers are nil
+ok   burst_of matches cluster_by_time
+ok   camera on: final_of is camera_of
+ok   all on: final_of is parent_of
+ok   all on: every layer ran
+ok   layers never merge across bursts
+ok   all on: every unit has a final group
+ok   base_of keeps its groups
+ok   unit outside base_of is numbered after the base groups
+ok   group_tag pads the final group number
+ok   group_tag pads the burst number
+ok   group_tag uses the label for Camera
+ok   wanted_tags: both members of a pair get the same set
+ok   wanted_tags: trace on writes the layer trace tags
+ok   wanted_tags: absent tag and child read not/none
+ok   wanted_tags: trace off writes Group only
+ok   wanted_tags: timing alone writes Group only (Burst would be identical)
+ok   latest_group_tag picks the later stamp
+ok   latest_group_tag returns nil with none
+ok   latest_group_tag ignores another prefix
+ok   latest_group_tag accepts a 5-digit group on a later stamp
+ok   latest_group_tag ignores a malformed stamp
+ok   latest_group_tag: malformed stamp cannot beat a real one
+ok   base_of_from_tags: shared latest tag shares a number
+ok   base_of_from_tags: dense from 1 by first appearance
+ok   base_of_from_tags: unit with no group tag is absent
+ok   ledger round trip keeps a name with , and "
+ok   ledger round trip keeps the native leader
+ok   ledger round trip: no native means nil
+ok   ledger round trip keeps tag sets
+ok   ledger_format is stable
+ok   ledger_format quotes every field
+ok   ledger_parse of empty text
+ok   ledger_format writes the library key first
+ok   ledger_parse: another library's rows aren't ours
+ok   ledger_parse: rows without a library column are ours
+ok   ledger_parse: the other library's rows are kept
+ok   ledger_format: ours first, the other library's rows after
+ok   ledger_format of an unchanged file is stable
+ok   ledger_prune keeps the image that exists
+ok   ledger_prune drops an image that's gone
+ok   ledger_prune: nothing resolving means the lookup failed, not every image gone
+ok   plan_replace never removes a user tag
+ok   plan_replace removes an old ledger tag no longer wanted
+ok   plan_replace does not re-add a present wanted tag
+ok   plan_native groups a fresh burst under its lowest id; a single frame stays alone
+ok   plan_native skips an image in a hand-made group and counts it
+ok   plan_native regroups an image whose group the plugin made
+ok   plan_native dissolves a ledger group for an image now alone
+ok   plan_native forms no group when skipping leaves one image
+ok   plan_native leaves a lone image in a hand-made group uncounted
+ok   plan_native takes a RAW+JPEG pair darktable grouped on import into the burst
+ok   plan_native groups a pair that is its own final group
+ok   plan_native treats an unselected JPEG in the RAW's group as the same frame
+ok   plan_native skips the whole frame when one of its images is in a hand-made group
+ok   timing off: every unit, timed or not, shares group 1
+ok   timing off: result.timing is false
+ok   timing default: result.timing is true
+ok   timing off + camera: splits by camera only
+ok   timing off + base_of: the rest share one group after the base groups
+ok   run_layers alone: base groups kept, rest each alone
+ok   run_layers alone: result.timing is false
+ok   run_layers alone: empty base_of gives one group per unit
+ok   wanted_tags: timing off writes no Burst tag
+ok   parse_gap: integer text
+ok   parse_gap: decimal point
+ok   parse_gap: decimal comma
+ok   parse_gap: surrounding spaces
+ok   parse_gap: leading dot
+ok   parse_gap: number input
+ok   parse_gap: zero is rejected
+ok   parse_gap: negative is rejected
+ok   parse_gap: hex is rejected
+ok   parse_gap: exponent is rejected
+ok   parse_gap: blank is rejected
+ok   parse_gap: lone dot is rejected
+ok   parse_gap: nil is rejected
+ok   parse_gap: two dots are rejected
+ok   panel_options: both outputs off refuses
+ok   panel_options: bad gap with timing on refuses
+ok   panel_options: bad gap ignored with timing off
+ok   panel_options: timing off passes timing = false
+ok   panel_options: no layer and no refine refuses
+ok   panel_options: refine alone is enough
+ok   panel_options: gap parsed, tag trimmed, trailing | dropped from parent
+ok   panel_options: blank tag and parent become nil
+ok   start_from_of: refine wins
+ok   start_from_of: timing off
+ok   start_from_of: nil keys default to time
+ok   upgrade_preset_text: timing=false, refine=true loads as tags
+ok   upgrade_preset_text: both on loads as tags
+ok   upgrade_preset_text: timing=false, refine=false loads as one
+ok   upgrade_preset_text: empty object loads as time
+ok   upgrade_preset_text: start_from present is returned unchanged
+ok   upgrade_preset_text: undecodable text is returned unchanged
+ok   upgrade_preset_text: write_tags true turns trace_tags on
+ok   upgrade_preset_text: write_tags true notes one line
+ok   upgrade_preset_text: write_tags false leaves trace_tags default
+ok   upgrade_preset_text: write_tags false has no note
+ok   upgrade_preset_text: trace_tags present is kept
+ok   upgrade_preset_text: undecodable text has no notes
+ok   TAG_TOGGLES: every row has a kind in TAG_KINDS
+ok   NOTICE_TAGS_OFF names Group tags
+ok   panel_notice: fine is empty
+ok   panel_notice: both outputs off
+ok   panel_notice: bad gap with capture time
+ok   panel_notice: bad gap ignored with one group
+ok   panel_notice: tags source without write tags
+ok   panel_notice: tags source counts as a layer
+ok   panel_notice: one group without a layer
+ok   panel_notice: outputs off outranks bad gap
+ok   plan_clear: ledger tags on the image only, hand tags and unledgered images left
+ok   plan_clear: a leader alone in its group is not ungrouped
+ok   plan_clear: an image moved into a hand-made group is not ungrouped
+ok   plan_clear: group still ours after its leader left (another member shares the leader id)
+ok   plan_clear: records without filenames get no restore group
+ok   plan_clear: two cleared RAW+JPEG pairs -> two restore groups under their lowest ids
+ok   plan_clear: a lone image gets no restore group
+ok   plan_clear: hand-made cross-frame group is left alone
+ok   plan_pairs: one group per frame under its lowest id, stem case ignored, repeats once
+ok   plan_pairs: no records, no groups
+ok   subsec_fractions: RAW with a blank row borrows its JPEG's fraction
+ok   subsec_fractions: pair leaves nothing missing
+ok   subsec_fractions: RAW with no sibling has no fraction
+ok   subsec_fractions: RAW with no sibling is reported missing
+ok   subsec_fractions: absent row with no sibling is reported missing
+ok   subsec_fractions: JPEG alone keeps its own fraction
+ok   subsec_fractions: stem case differs → same frame (as darktable's import grouping), borrows
+ok   collapse: DSC1.ARW + dsc1.jpg are one frame
+ok   subsec_fractions: extension case is ignored, borrows
+ok   subsec_fractions: same stem in another folder does not lend
+ok   subsec_fractions: a whole-second (non-blank) row does not borrow
+ok   subsec_fractions: blank pair has no fraction; untimed records are ignored
+ok   ledger_parse of CRLF text matches LF
+ok   wanted_tags: Refine alone writes Group only
+ok   needs_tags: defaults minus tag writer read no tags
+ok   needs_tags: tag writer reads tags
+ok   needs_tags: Refine reads tags
+ok   manifest_rows: one row per frame, the JPEG of a pair, a RAW alone, undated JPEG skipped, untimed frame left out
+ok   units_to_time: timing off times nothing
+ok   units_to_time: untimed frame left out
+ok   units_to_time: frames with a Refine group left out
+ok   members_of: every member of the units
+ok   apply_subsec: RAW not sent borrows its JPEG's fraction (CRLF results)
+ok   apply_subsec: whole precision leaves epochs
+ok   apply_subsec: whole precision says why
+ok   apply_subsec: nothing timed
+ok   parse_helper_results: rows and precision
+ok   count_tagged: frames with the tag
+ok   count_tagged: a spelling with spaces matches nothing
+ok   plan_tag_changes: detaches own tag, keeps hand-made, attaches new
+ok   plan_tag_changes: ledger tag removed by hand is dropped
+ok   set_ledger_tags: empty entry dropped
+ok   set_ledger_tags: entry with a native leader kept
+ok   set_ledger_native: cleared entry dropped
+ok   run_stamp: same second steps forward
+ok   run_stamp: later time used as is
+ok   pythonw_of: venv python.exe
+ok   pythonw_of: case-insensitive
+ok   pythonw_of: bare python on PATH
+ok   pythonw_of: other launcher is refused
+ok   write_file_atomic: replaces an existing file
+ok   write_file_atomic: new text read back
+ok   write_file_atomic: no .tmp left
+ok   read_file_or_tmp: falls back to .tmp when the file is missing
+ok   write_file_atomic: unwritable folder fails
+ok   preset decode string
+ok   preset decode true
+ok   preset decode float
+ok   preset decode false
+ok   preset decode negative
+ok   preset decode version
+ok   preset decode BOM
+ok   preset decode empty object
+ok   preset decode null drops key
+ok   preset decode \u escape
+ok   preset decode surrogate pair
+ok   preset decode escapes
+ok   preset decode rejects trailing comma
+ok   preset decode rejects nested object
+ok   preset decode rejects array
+ok   preset decode rejects trailing junk
+ok   preset decode rejects empty text
+ok   preset decode rejects missing colon
+ok   preset decode rejects unterminated string
+ok   preset decode rejects bare word
+ok   preset decode rejects not an object
+ok   preset encode version first
+ok   preset encode schema order
+ok   preset encode ends with newline
+ok   preset round trip string
+ok   preset round trip bool
+ok   preset round trip number
+ok   preset round trip choice
+ok   preset encode whole number
+ok   preset merge missing key uses default
+ok   preset merge keeps valid value
+ok   preset merge string for number falls back
+ok   preset merge label for choice falls back
+ok   preset merge drops unknown key
+ok   preset merge lists problems
+ok   preset merge missing keys are not problems
+ok   preset defaults
+ok   preset equal same values
+ok   preset equal bool flipped
+ok   preset name trimmed
+ok   preset name empty
+ok   preset name blank
+ok   preset name nil
+ok   preset name reserved
+ok   preset name slash
+ok   preset name colon
+ok   preset name quote
+ok   preset order
+ok   preset order empty
+ok   preset schema: defaults
+ok   preset schema: start_from accepts only its choices
+ok   preset schema: decimal gap kept
+ok   PANEL_PAGES: every preset key is on one page or listed off-stack
+ok   PANEL_PAGES: titles match the README sections
+1 failure(s)
