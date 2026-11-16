@@ -320,19 +320,7 @@ For each step that doesn't match, send back:
 
 Run these from the repo root (the `darktable-assisted-grouping` folder).
 
-The grouping logic (the top of `lua/assisted_grouping.lua`, above its `require "darktable"`) runs under any Lua 5.4, no darktable needed:
-
-```
-lua lua/test_assisted_grouping.lua
-```
-
-No `lua` binary handy? `pip install lupa` in the venv, then:
-
-```
-.venv/bin/python -c "import lupa; L=lupa.LuaRuntime(); L.execute('package.path=\"./lua/?.lua;\"..package.path; dofile(\"lua/test_assisted_grouping.lua\")')"
-```
-
-The Python tests run every `python/test_*.py` and write each one's output to `tests/<name>.txt`:
+One command runs every `python/test_*.py` and the Lua suite `lua/test_assisted_grouping.lua` (the grouping logic above its `require "darktable"`, no darktable needed), or only the ones named (e.g. `exif_times assisted_grouping`), and writes each one's output to `tests/<name>.txt`. The Lua suite uses a `lua` on PATH if there is one, else lupa: run `pip install lupa` in the venv once (Windows has no `lua` by default):
 
 ```
 # Linux / macOS
