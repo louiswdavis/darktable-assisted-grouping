@@ -1,9 +1,11 @@
 # Run with: python python/exif_times.py MANIFEST RESULTS
 """Read capture times with sub-second precision, which darktable's Lua does not expose.
 
-MANIFEST is a CSV of `id,path` rows. RESULTS gets one `id,epoch` row per manifest row (epoch blank
-when the file has no readable DateTimeOriginal or is missing), then a final `#precision,subsecond`
-or `#precision,whole` line. It is `whole` when any readable file lacked a sub-second value.
+MANIFEST is a CSV of `id,path` rows, or `id,path,camera` rows when the plugin splits by camera.
+RESULTS gets one `id,epoch` row per manifest row (epoch blank when the file has no readable
+DateTimeOriginal or is missing). With cameras, one `#precision,<value>,<camera>` row per camera
+follows, sorted by camera. A final `#precision,subsecond` or `#precision,whole` line ends the file.
+A precision is `whole` when any readable file it covers lacked a sub-second value.
 
 Epochs use the core's constant-offset convention: the naive EXIF time is read as UTC, no DST.
 
@@ -56,13 +58,19 @@ def main(manifest: str, results: str) -> int:
     with open(manifest, newline="", encoding="utf-8") as f:
         rows = [r for r in csv.reader(f) if r]
     all_subsec = True
+    subsec_of = {}  # camera -> every readable file of it had a sub-second value
     with open(results, "w", newline="", encoding="utf-8") as f:
         out = csv.writer(f)
-        for image_id, path in rows:
+        for row in rows:
+            image_id, path = row[0], row[1]
             epoch, has_subsec = _parse(path)
+            if len(row) > 2:
+                subsec_of[row[2]] = subsec_of.get(row[2], True) and (epoch is None or has_subsec)
             if epoch is not None and not has_subsec:
                 all_subsec = False
             out.writerow([image_id, _format(epoch)])
+        for camera in sorted(subsec_of):
+            out.writerow(["#precision", "subsecond" if subsec_of[camera] else "whole", camera])
         out.writerow(["#precision", "subsecond" if all_subsec else "whole"])
     return 0
 

@@ -707,17 +707,46 @@ check("members_of: every member of the units", #A.members_of(a_units), 6)
 
 local sub_units = A.collapse({ arec(1, "DSC1.ARW", 100), arec(2, "DSC1.JPG", 100) })
 local sub_members = A.members_of(sub_units)
-local prec = A.apply_subsec(sub_members, "2,1780308000.5\r\n#precision,subsecond\r\n")
+local prec = A.apply_subsec(sub_units, "2,1780308000.5\r\n#precision,subsecond\r\n")
 check("apply_subsec: RAW not sent borrows its JPEG's fraction (CRLF results)",
     prec == "subsecond" and near(sub_members[1].epoch, 100.5) and near(sub_members[2].epoch, 100.5), true)
-local whole_members = A.members_of(A.collapse({ arec(1, "DSC1.JPG", 100) }))
-local wprec, wwhy = A.apply_subsec(whole_members, "1,1780308000\n#precision,whole\n")
+local whole_units = A.collapse({ arec(1, "DSC1.JPG", 100) })
+local whole_members = A.members_of(whole_units)
+local wprec, wwhy = A.apply_subsec(whole_units, "1,1780308000\n#precision,whole\n")
 check("apply_subsec: whole precision leaves epochs", wprec .. " " .. tostring(whole_members[1].epoch), "whole 100")
 check("apply_subsec: whole precision says why", wwhy ~= nil, true)
-check("apply_subsec: nothing timed", select(2, A.apply_subsec({ arec(1, "X.JPG", nil) }, "")), "no frame has a capture time")
+check("apply_subsec: nothing timed", select(2, A.apply_subsec(A.collapse({ arec(1, "X.JPG", nil) }), "")),
+    "no frame has a capture time")
 
-local by_id, hprec = A.parse_helper_results("7,1780308000.25\n8,\n#precision,subsecond\n")
+-- per-camera precision: body A has fractions on every frame, body B on none
+local function crec(id, filename, epoch, model)
+    local r = arec(id, filename, epoch)
+    r.maker, r.model = "SONY", model
+    return r
+end
+local function two_bodies()
+    return A.collapse({ crec(1, "A1.JPG", 100, "A7"), crec(2, "A2.JPG", 101, "A7"),
+        crec(3, "B1.JPG", 100, "ZV"), crec(4, "B2.JPG", 102, "ZV") })
+end
+local key_a, key_b = A.camera_key({ maker = "SONY", model = "A7" }), A.camera_key({ maker = "SONY", model = "ZV" })
+local mixed_text = "1,1780308000.25\n2,1780308001.5\n3,1780308000\n4,1780308002\n" ..
+    "#precision,subsecond," .. key_a .. "\n#precision,whole," .. key_b .. "\n#precision,whole\n"
+local cam_units = two_bodies()
+local cprec, cwhy, cwhole = A.apply_subsec(cam_units, mixed_text, true)
+local cam_members = A.members_of(cam_units)
+check("apply_subsec Camera on: body with fractions keeps them, the other stays whole",
+    cprec .. " " .. tostring(cwhy) .. " " .. tostring(cwhole[key_a]) .. " " .. tostring(cwhole[key_b] ~= nil)
+    .. " " .. tostring(near(cam_members[1].epoch, 100.25)) .. " " .. cam_members[3].epoch, "mixed nil nil true true 100")
+local off_units = two_bodies()
+local oprec = A.apply_subsec(off_units, mixed_text, false)
+check("apply_subsec Camera off: one timeline, whole when any frame lacks a fraction",
+    oprec .. " " .. A.members_of(off_units)[1].epoch, "whole 100")
+check("manifest_rows: Camera on adds the camera_key column", A.manifest_rows(two_bodies(), true)[3][3], key_b)
+check("manifest_rows: Camera off keeps two columns", A.manifest_rows(two_bodies(), false)[1][3], nil)
+
+local by_id, hprec, hprec_of = A.parse_helper_results("7,1780308000.25\n8,\n#precision,whole,Cam B\n#precision,subsecond\n")
 check("parse_helper_results: rows and precision", by_id[7] .. "|" .. by_id[8] .. "|" .. hprec, "1780308000.25||subsecond")
+check("parse_helper_results: per-camera precision rows", hprec_of["Cam B"], "whole")
 
 check("count_tagged: frames with the tag", A.count_tagged(A.collapse({ arec(1, "A.JPG", 1, { ["Cars|Red"] = true }),
     arec(2, "B.JPG", 1) }), "Cars|Red"), 1)
@@ -743,6 +772,7 @@ local s1, t1 = A.run_stamp(1000, nil)
 local s2, t2 = A.run_stamp(1000, t1)
 check("run_stamp: same second steps forward", t2 == t1 + 1 and s2 > s1, true)
 check("run_stamp: later time used as is", select(2, A.run_stamp(2000, t2)), 2000)
+check("run_stamp: written in UTC", A.run_stamp(1780308000, nil), "2026-06-01 10:00:00")
 
 check("pythonw_of: venv python.exe", A.pythonw_of("C:/x/.venv/Scripts/python.exe"), "C:/x/.venv/Scripts/pythonw.exe")
 check("pythonw_of: case-insensitive", A.pythonw_of("C:\\Py\\Python.EXE"), "C:\\Py\\pythonw.exe")

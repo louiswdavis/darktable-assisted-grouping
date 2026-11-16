@@ -161,9 +161,16 @@ M.AUTO_GAP_LOG_RANGE = { -2, 4 } -- 0.01 s to 10000 s; gaps outside land in the 
 M.AUTO_GAP_VALLEY = 0.5 -- the valley is at most this share of the smaller peak
 M.AUTO_GAP_CLAMP = { 0.3, 10 }
 
+-- whole_seconds is true (every timeline), false/nil (none) or, with Camera on, a set of
+-- the camera_keys on whole seconds (M.apply_subsec's whole_of).
+local function is_whole(whole_seconds, key)
+    return whole_seconds == true or type(whole_seconds) == "table" and whole_seconds[key] ~= nil
+end
+
 -- Gaps between consecutive timed units, each camera_key on its own timeline when
 -- by_camera (two bodies shooting at once interleave, so their cross gaps are not bursts).
-local function capture_gaps(units, by_camera)
+-- A whole-second timeline's gaps are at least 1 s, so its 0 s and 1 s gaps share a bin.
+local function capture_gaps(units, by_camera, whole_seconds)
     local lines = {}
     for _, unit in ipairs(units) do
         if unit.epoch then
@@ -173,9 +180,10 @@ local function capture_gaps(units, by_camera)
         end
     end
     local gaps = {}
-    for _, epochs in pairs(lines) do
+    for k, epochs in pairs(lines) do
+        local floor_gap = is_whole(whole_seconds, k) and 1 or 0
         table.sort(epochs)
-        for i = 2, #epochs do gaps[#gaps + 1] = epochs[i] - epochs[i - 1] end
+        for i = 2, #epochs do gaps[#gaps + 1] = math.max(epochs[i] - epochs[i - 1], floor_gap) end
     end
     return gaps
 end
@@ -183,10 +191,10 @@ end
 -- Returns (gap seconds, how) for gap = "auto": the lowest point of the smoothed histogram
 -- between its two biggest peaks, clamped to AUTO_GAP_CLAMP, or M.BURST_GAP_SECONDS when
 -- there are too few gaps or no clear valley. how is "valley", "valley, clamped" or
--- "fallback: <why>". whole_seconds: times have no sub-second part, so 0 s and 1 s gaps
--- are one bin and the cut is at least 1 s.
+-- "fallback: <why>". whole_seconds (see is_whole): a timeline without sub-second parts has
+-- its 0 s and 1 s gaps in one bin, and with any such timeline the cut is at least 1 s.
 function M.auto_gap(units, by_camera, whole_seconds)
-    local gaps = capture_gaps(units, by_camera)
+    local gaps = capture_gaps(units, by_camera, whole_seconds)
     if #gaps < M.AUTO_GAP_MIN_GAPS then
         return M.BURST_GAP_SECONDS, string.format("fallback: %d gaps, fewer than %d", #gaps, M.AUTO_GAP_MIN_GAPS)
     end
@@ -194,9 +202,8 @@ function M.auto_gap(units, by_camera, whole_seconds)
     local n = math.floor((hi - lo) / M.AUTO_GAP_BIN + 0.5)
     local hist = {}
     for i = 1, n do hist[i] = 0 end
-    local floor_gap = whole_seconds and 1 or 10 ^ lo
     for _, g in ipairs(gaps) do
-        local b = math.floor((math.log(math.max(g, floor_gap), 10) - lo) / M.AUTO_GAP_BIN) + 1
+        local b = math.floor((math.log(math.max(g, 10 ^ lo), 10) - lo) / M.AUTO_GAP_BIN) + 1
         b = math.min(math.max(b, 1), n)
         hist[b] = hist[b] + 1
     end
@@ -219,7 +226,8 @@ function M.auto_gap(units, by_camera, whole_seconds)
     local last = cut
     while last + 1 < math.max(p1, p2) and s[last + 1] == s[cut] do last = last + 1 end
     local gap = 10 ^ (lo + ((cut + last) / 2 - 0.5) * M.AUTO_GAP_BIN)
-    local min_gap = whole_seconds and math.max(1, M.AUTO_GAP_CLAMP[1]) or M.AUTO_GAP_CLAMP[1]
+    local any_whole = whole_seconds == true or type(whole_seconds) == "table" and next(whole_seconds) ~= nil
+    local min_gap = any_whole and math.max(1, M.AUTO_GAP_CLAMP[1]) or M.AUTO_GAP_CLAMP[1]
     local clamped = math.min(math.max(gap, min_gap), M.AUTO_GAP_CLAMP[2])
     return clamped, clamped == gap and "valley" or "valley, clamped"
 end
@@ -946,60 +954,88 @@ end
 
 -- `id,path` rows for exif_times.py, one per unit: its JPEG when it has a dated one
 -- (a fast Pillow read), else its lowest-id dated member. The unit's other members
--- borrow that fraction (M.subsec_fractions), so a RAW+JPEG pair costs one read.
-function M.manifest_rows(units)
+-- borrow that fraction (M.subsec_fractions), so a RAW+JPEG pair costs one read. With
+-- by_camera a third column holds the unit's camera_key, so the helper decides
+-- precision per camera.
+function M.manifest_rows(units, by_camera)
     local rows = {}
     for _, unit in ipairs(units) do
         local pick
         for _, m in ipairs(unit.members or { unit }) do
             if m.epoch and (pick == nil or (is_jpeg(m) and not is_jpeg(pick))) then pick = m end
         end
-        if pick then rows[#rows + 1] = { pick.id, pick.file } end
+        if pick then
+            rows[#rows + 1] = by_camera and { pick.id, pick.file, M.camera_key(unit) } or { pick.id, pick.file }
+        end
     end
     table.sort(rows, function(a, b) return a[1] < b[1] end)
     return rows
 end
 
--- exif_times.py's results: id (number) → epoch text ("" when unreadable), and the
--- `#precision` value.
+-- exif_times.py's results: id (number) → epoch text ("" when unreadable), the run's
+-- `#precision` value, and camera_key → precision from its `#precision,<value>,<camera>`
+-- rows (a manifest with cameras only).
 function M.parse_helper_results(text)
-    local by_id, precision = {}, nil
+    local by_id, precision, precision_of = {}, nil, {}
     for _, row in ipairs(M.parse_csv(text or "")) do
-        if row[1] == "#precision" then
+        if row[1] == "#precision" and row[3] then
+            precision_of[row[3]] = row[2]
+        elseif row[1] == "#precision" then
             precision = row[2]
         else
             local id = tonumber(row[1])
             if id then by_id[id] = row[2] or "" end
         end
     end
-    return by_id, precision
+    return by_id, precision, precision_of
 end
 
--- Adds the helper's sub-second fraction to each record's whole-second epoch, only
--- when every timed frame has a fraction (its own, or borrowed from the JPEG of its
--- RAW+JPEG pair, see M.subsec_fractions) and the helper says
--- `subsecond`. Only the fraction is taken: the helper's whole part (timegm) and
--- the core's (os.time) can differ by the local offset. `records` are the members
--- of the timed units (members_of). Returns "subsecond" or "whole" and, for
--- "whole", why.
-function M.apply_subsec(records, text)
-    local any_timed = false
-    for _, r in ipairs(records) do
-        if r.epoch then any_timed = true; break end
+-- Adds the helper's sub-second fraction to the whole-second epoch of each member of
+-- the timed `units`, per timeline: one timeline with by_camera off, one per camera_key
+-- with it on. A timeline keeps fractions only when every timed frame on it has one (its
+-- own, or borrowed from the JPEG of its RAW+JPEG pair, see M.subsec_fractions) and the
+-- helper says `subsecond` for it; otherwise all its frames stay on whole seconds, so no
+-- timeline mixes the two. Only the fraction is taken: the helper's whole part (timegm)
+-- and the core's (os.time) can differ by the local offset. Returns "subsecond", "whole"
+-- or "mixed" (some cameras on whole seconds), why for "whole", and whole_of: the
+-- timeline's camera_key ("" with by_camera off) → why, for each timeline on whole seconds.
+function M.apply_subsec(units, text, by_camera)
+    local lines, keys = {}, {}
+    for _, unit in ipairs(units) do
+        if unit.epoch then
+            local k = by_camera and M.camera_key(unit) or ""
+            if not lines[k] then lines[k] = {}; keys[#keys + 1] = k end
+            table.insert(lines[k], unit)
+        end
     end
-    if not any_timed then return "whole", "no frame has a capture time" end
-    local by_id, precision = M.parse_helper_results(text)
-    if precision ~= "subsecond" then
-        return "whole", "the helper reported whole-second precision"
+    if #keys == 0 then return "whole", "no frame has a capture time", {} end
+    table.sort(keys)
+    local by_id, precision, precision_of = M.parse_helper_results(text)
+    local whole_of = {}
+    for _, k in ipairs(keys) do
+        local records = M.members_of(lines[k])
+        local frac_of, missing = M.subsec_fractions(records, by_id)
+        if missing then
+            local lacking = 0
+            for _, unit in ipairs(lines[k]) do
+                for _, m in ipairs(unit.members or { unit }) do
+                    if m.epoch and not frac_of[m.id] then lacking = lacking + 1; break end
+                end
+            end
+            whole_of[k] = string.format("%d of %d frames had none", lacking, #lines[k])
+        elseif (by_camera and precision_of[k] or precision) ~= "subsecond" then
+            whole_of[k] = "the helper reported whole-second precision"
+        else
+            for _, r in ipairs(records) do
+                if r.epoch and frac_of[r.id] then r.epoch = r.epoch + frac_of[r.id] end
+            end
+        end
     end
-    local frac_of, missing = M.subsec_fractions(records, by_id)
-    if missing then
-        return "whole", string.format("image %d has no readable sub-second time", missing)
-    end
-    for _, r in ipairs(records) do
-        if r.epoch and frac_of[r.id] then r.epoch = r.epoch + frac_of[r.id] end
-    end
-    return "subsecond"
+    local n_whole = 0
+    for _ in pairs(whole_of) do n_whole = n_whole + 1 end
+    if n_whole == 0 then return "subsecond", nil, whole_of end
+    if n_whole < #keys then return "mixed", nil, whole_of end
+    return "whole", #keys == 1 and whole_of[keys[1]] or "no camera had sub-second time on every frame", whole_of
 end
 
 -- Per image: the sorted tags to attach and detach, and the plugin's tags after the
@@ -1035,10 +1071,10 @@ end
 
 -- The run stamp for `now` (os.time), and the time it stands for. Never at or before
 -- `last_time`, so runs in the same second get different stamps and their groups
--- never merge.
+-- never merge. Written in UTC, so string order is time order across DST changes.
 function M.run_stamp(now, last_time)
     local t = (last_time and now <= last_time) and last_time + 1 or now
-    return os.date("%Y-%m-%d %H:%M:%S", t), t
+    return os.date("!%Y-%m-%d %H:%M:%S", t), t
 end
 
 -- Shared with culling and tagging (plugin_common.lua); re-exported for the tests.
@@ -1264,8 +1300,8 @@ end
 -- results text, or nil plus "cancelled" or a reason the run falls back to whole
 -- seconds. A helper still running at a cancel or the timeout keeps its temp files;
 -- the next run uses new names, so it needn't wait.
-local function read_helper_times(units, job)
-    local rows = M.manifest_rows(units)
+local function read_helper_times(units, by_camera, job)
+    local rows = M.manifest_rows(units, by_camera)
     if #rows == 0 then return nil, "no frame has a capture time" end
     local p = new_run_paths()
     if not write_rows(p.manifest, rows) then
@@ -1487,22 +1523,30 @@ function M.group_images(images, opts)
 
         -- Only frames the burst layer times need the helper.
         local to_time = M.units_to_time(units, opts.timing, layer_opts.base_of)
-        local precision = "whole"
+        local precision, whole_of = "whole", nil
         if opts.timing == false then
             log("timing: off, capture times not read")
         elseif #to_time == 0 then
             log("timing: not needed (every frame has a group tag or no capture time)")
         else
-            local text, why = read_helper_times(to_time, job)
+            local text, why = read_helper_times(to_time, opts.camera, job)
             flush_log()
             if why == "cancelled" then
                 say("Assisted Grouping: cancelled, nothing was changed.")
                 return
             end
             local reason = why
-            if text then precision, reason = M.apply_subsec(M.members_of(to_time), text) end
-            if precision == "subsecond" then
-                log("timing: sub-second")
+            if text then precision, reason, whole_of = M.apply_subsec(to_time, text, opts.camera) end
+            if opts.camera and precision ~= "subsecond" then
+                local cameras = {}
+                for k in pairs(whole_of or {}) do cameras[#cameras + 1] = k end
+                table.sort(cameras)
+                for _, k in ipairs(cameras) do
+                    log(string.format("Sub-second time off for %s (%s)", k ~= "" and k or "an unnamed camera", whole_of[k]))
+                end
+            end
+            if precision == "subsecond" or precision == "mixed" then
+                log(precision == "subsecond" and "timing: sub-second" or "timing: sub-second, except the cameras above")
                 units = M.collapse(records) -- unit epochs are copied from members at collapse
             else
                 log("timing: whole seconds for the whole run (" .. tostring(reason) .. ")")
@@ -1510,7 +1554,7 @@ function M.group_images(images, opts)
         end
         job.percent = 0.5
 
-        layer_opts.whole_seconds = precision ~= "subsecond"
+        layer_opts.whole_seconds = precision == "mixed" and whole_of or precision ~= "subsecond"
         local result = M.run_layers(units, layer_opts)
         if result.gap_how then
             log(string.format("auto gap %.2g s (%s)", result.gap, result.gap_how))
@@ -1532,7 +1576,8 @@ function M.group_images(images, opts)
         end
         local timing_label = opts.timing == false and "timing off"
             or #to_time == 0 and "no timing needed"
-            or precision == "subsecond" and "sub-second timing" or "whole-second timing"
+            or precision == "subsecond" and "sub-second timing"
+            or precision == "mixed" and "sub-second timing, some cameras whole seconds" or "whole-second timing"
 
         -- Groups need the whole selection, so a cancelled run writes nothing.
         if cancelled(job) then

@@ -133,6 +133,10 @@ def run_tests():
         out = run_cli(tmp, [["1", sub47], ["2", sub5], ["3", missing]])
         check("CLI all subsec (unreadable ignored) -> subsecond", out[-1], ["#precision", "subsecond"])
 
+        out = run_cli(tmp, [["1", sub47, "Cam A"], ["2", whole, "Cam B"], ["3", missing, "Cam A"], ["4", sub5, "Cam A"]])
+        check("CLI with cameras: one precision row per camera, sorted, before the overall line", out[4:],
+              [["#precision", "subsecond", "Cam A"], ["#precision", "whole", "Cam B"], ["#precision", "whole"]])
+
 
 if __name__ == "__main__":
     run_tests()

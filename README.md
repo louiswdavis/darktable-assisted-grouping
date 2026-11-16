@@ -8,7 +8,7 @@ A grouping assistant for [darktable](https://www.darktable.org/). Select a batch
 
 Everything runs locally: a Lua plugin inside darktable and a small Python helper (Pillow and exifread) that reads sub-second capture times. No models, no cloud. It only adds and removes its own `Assisted Grouping|…` tags and the darktable groups it made; tags and groups you made by hand are never touched (see [Limitations](#limitations)).
 
-It is the third plugin next to `darktable-assisted-tagging` and `darktable-assisted-culling`. The three can be installed side by side. Grouping does one job, so the other two can later read its groups instead of each clustering bursts on their own.
+It is the third plugin next to `darktable-assisted-tagging` and `darktable-assisted-culling`. The three can be installed side by side. Grouping does one job, and the other two read its groups instead of each clustering bursts on their own: darktable groups, or its `Group` tags, picked by their **grouping support** setting (see Grouping support in the [culling](../darktable-assisted-culling/README.md#grouping-support) and [tagging](../darktable-assisted-tagging/README.md#grouping-support) READMEs).
 
 > **Status: not yet run inside darktable.** The pure logic and the Python helper are tested; the darktable side has never been run. Work through the [Acceptance checklist](#acceptance-checklist) first and report what breaks.
 
@@ -94,7 +94,7 @@ Select **whole bursts, or the whole shoot**. Bursts are built from the selected 
 
 ### What you get
 
-Each run has a **stamp**: its start time as `YYYY-MM-DD HH:MM:SS`. Every tag the run writes sits under `Assisted Grouping|<stamp>|`, so groups from different runs never collide. Two runs started in the same second get stamps one second apart.
+Each run has a **stamp**: its start time in UTC as `YYYY-MM-DD HH:MM:SS`, so a later run always sorts after an earlier one, across daylight-saving changes and time zones. Stamps written before this change are local time; within your UTC offset of the switch an old run can sort after a new one, and regrouping those photos fixes it. Every tag the run writes sits under `Assisted Grouping|<stamp>|`, so groups from different runs never collide. Two runs started in the same second get stamps one second apart.
 
 With **Group tags** on, every photo gets the `Group` tag. With **Layer trace tags** also on, it gets the four layer trace tags too:
 
@@ -227,10 +227,13 @@ In **preferences → lua options**. Everything else is a panel setting saved wit
 
 When a frame's JPEG is in the selection, only the JPEG is read and **the RAW borrows its fraction** (same folder and filename stem, extension and case ignored). That halves the reads on a RAW+JPEG shoot. If that JPEG has no readable sub-second time, the RAW isn't tried and the run uses whole seconds. Only the fraction comes from the helper; the whole seconds always come from darktable.
 
-If any timed frame ends up with no fraction (a RAW-only frame neither reader can open, a file without the field, or the helper failing), **the whole run uses whole seconds**, so precision is never mixed. The log says which, and why:
+If any timed frame on a timeline ends up with no fraction (a RAW-only frame neither reader can open, a file without the field, or the helper failing), **that whole timeline uses whole seconds**, so no timeline mixes the two. With **Camera** off the run is one timeline. With **Camera** on each camera (maker, model and lens) is its own timeline, so a body that records sub-seconds keeps them when a second body does not. The log says which, and why:
 
 - `timing: sub-second`
-- `timing: whole seconds for the whole run (image 1234 has no readable sub-second time)`
+- `timing: whole seconds for the whole run (3 of 40 frames had none)`
+- with Camera on, one line per camera on whole seconds, such as `Sub-second time off for SONY ZV-E10 E 18-105mm F4 G OSS (40 of 40 frames had none)`, then `timing: sub-second, except the cameras above` when another camera kept them
+
+On a whole-second timeline the automatic burst gap treats 0 s and 1 s gaps as the same, and the cut is never under 1 s.
 
 The other reasons it can give: no frame has a capture time, the helper reported whole-second precision, the helper couldn't start, stopped with an error, wrote no results, or didn't finish within 10 minutes.
 
@@ -243,7 +246,7 @@ Capture times use a constant offset with no daylight saving (`isdst = false`), s
 - **The panel isn't there.** Start darktable with `-d lua` and look for `LUA ERROR` in the log. On Windows the log is `Documents\Darktable\darktable-log.txt`. A `module ... not found` error means darktable is loading an old copy of `assisted_grouping.lua`: re-link or re-copy it from this repo.
 - **Every run writes a log** to `assisted_grouping.log` in darktable's config directory (`%LOCALAPPDATA%\darktable\assisted_grouping.log` on Windows); the run before it is kept as `assisted_grouping.prev.log`. It has the run stamp and every setting, the timing line, the frame and group counts, how many photos the parent layer left unsplit, the tags attached and detached, the darktable groups made and skipped, every message shown on screen, and the helper's errors. Start here when a result looks wrong.
 - **"the plugins folder preference gives …, which has no python/exif_times.py."** Point the preference at the folder holding `darktable-assisted-grouping`, or clear it to auto-detect.
-- **The run always says whole-second.** Read the reason on the `timing:` line. If it names a RAW image, the helper couldn't read that RAW (check that `exifread` is installed in the interpreter, or select the JPEGs too). "exif_times.py stopped with exit code …" usually means the interpreter has no Pillow: install `python/requirements.txt` into it.
+- **The run always says whole-second.** Read the reason on the `timing:` line. If it counts frames with none, the helper couldn't read those files: on a RAW-only selection check that `exifread` is installed in the interpreter, or select the JPEGs too. "exif_times.py stopped with exit code …" usually means the interpreter has no Pillow: install `python/requirements.txt` into it.
 - **"another job is still running."** Wait, or cancel it from the progress bar.
 - **"No selected photo has the tag …"** The tag layer matched nothing, so every photo is `not …`. Check the spelling and spaces against the tagging module (`Cars|Red`, not `Cars | Red`).
 - **`dt_assisted_grouping_*` files in darktable's tmp folder** are from a helper that was still running at a cancel or the 10-minute timeout. They're safe to delete once it has finished.
@@ -283,7 +286,7 @@ The darktable side has never run: it was written without darktable to test again
 4. **Select 30-60 frames with both RAW and JPEG of each frame**, including a fast burst, a night shot and frames from two different lenses. In the panel: **start from** *capture time*, Group tags ticked, Apply darktable groups unticked (the defaults are Apply on, Group tags off; tick Group tags for this check, since steps 5 and 6 read the tags). Click **Group selection**. *Expect:* a progress bar, then "Assisted Grouping: N images in M groups (sub-second timing). Run YYYY-MM-DD HH:MM:SS."
 5. **Check the log** at `%LOCALAPPDATA%\darktable\assisted_grouping.log`. *Expect:* `group started`, the `run stamp …` settings line, `timing: sub-second`, `… frames in … groups (… bursts)`, `tags: … attached, 0 detached`, `run finished`.
 6. **Check the tags** in the tagging module. *Expect:* each image has `Assisted Grouping|<stamp>|Group|NNNN` (and no `Burst` tag, since timing is the only layer); the frames of the fast burst share one `Group` number; a RAW and its JPEG have identical tags; the night shot has its own tags like the rest.
-7. **RAW-only frames.** Select only the RAW (ARW) files of a few frames and run again. *Expect:* "(sub-second timing)" on screen and `timing: sub-second` in the log, since the helper reads ARW directly. If it says whole-second instead, note the image the `timing:` line names and run `.venv\Scripts\python python\probe_subsec.py <that file>` on it (macOS/Linux: `.venv/bin/python python/probe_subsec.py <that file>`).
+7. **RAW-only frames.** Select only the RAW (ARW) files of a few frames and run again. *Expect:* "(sub-second timing)" on screen and `timing: sub-second` in the log, since the helper reads ARW directly. If it says whole-second instead, run `.venv\Scripts\python python\probe_subsec.py <one of the files>` on one of them (macOS/Linux: `.venv/bin/python python/probe_subsec.py <one of the files>`).
 
 **Layers**
 
