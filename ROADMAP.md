@@ -2,13 +2,9 @@
 
 Ideas worth doing deliberately later, not bolted onto whatever's being fixed today.
 
-Sources: the shared backlog (`../docs/superpowers/specs/backlog/darktable-plugins-tickets/`, numbered tickets) and three research notes from 2026-11-15 in `../docs/superpowers/research/`:
-- `2026-11-15-unbuilt-ideas-harvest.md`: ideas found in old specs, audits and plans that the code doesn't have yet
-- `2026-11-15-competitors-and-ux.md`: how Aftershoot, Narrative Select, Lightroom and others group similar shots
-- `2026-11-15-model-candidates.md`: models that would run under cv2.dnn or onnxruntime
-- `2026-11-15-how-culling-tools-work.md`: how those tools group shots (patents and papers; none publishes its algorithm)
+Background for the items below came from desk research in November 2026: unbuilt ideas found in old specs and audits; how Aftershoot, Narrative Select, Lightroom and others group similar shots; models that run under cv2.dnn or onnxruntime; and the patents and papers behind shot grouping (no tool publishes its algorithm). What matters is written out in each item.
 
-Competitor figures in those notes are vendor claims and have not been checked.
+Competitor figures are vendor claims and have not been checked.
 
 ## Hand edits survive a re-run
 
@@ -24,7 +20,7 @@ Competitors that freeze groups or ignore hand edits get the most complaints.
 Grouping doesn't need to stay time-only; it can use different signals from the other plugins.
 - **From tagging's result:** a burst that changes car part-way splits at the change. The tagging result is read from the same ledger the other plugins already share.
 - **From looks, without tagging:** split where the livery embedding of adjacent car crops jumps, with a hard group-size cap. Reuses the DINOv2 embeddings tagging already computes for the shared detections. Fixes coarse groups carrying one identity across two cars.
-- **Tracks inside a burst:** link each car's boxes frame to frame (box overlap plus embedding) and write a track id. Culling can then keep one frame per track, and tagging can fuse number reads per track. Every sports pipeline in `../docs/superpowers/research/2026-11-15-identification-techniques.md` works per track.
+- **Tracks inside a burst:** link each car's boxes frame to frame (box overlap plus embedding) and write a track id. Culling can then keep one frame per track, and tagging can fuse number reads per track. Published sports identification pipelines (bib and jersey-number readers, race-car re-identification) all work per track: they detect, track, then vote across the track's frames, because one frame's read is often wrong.
 
 ## Group size
 
@@ -35,7 +31,7 @@ Grouping doesn't need to stay time-only; it can use different signals from the o
 ## Better timing
 
 Today bursts split at a fixed gap (`BURST_GAP_SECONDS` = 2 in `lua/assisted_grouping.lua`, changeable in preferences).
-- **Adaptive gap.** Fit a two-part mixture to the log of the time gaps in the collection (in-burst gaps vs between-car gaps) and cut at the valley between them. A hillclimb shot at 10 fps and a slow circuit session then get different cut points without touching the setting. The fixed gap stays as the fallback when the gaps don't form two humps. Effort S.
+- **Adaptive gap (built, untested on real shoots).** Type `auto` as the burst gap. `M.auto_gap` takes the log10 of the gaps between capture times (per camera when camera split is on), builds a 0.1-decade histogram, smooths it, and cuts at the lowest point between the two biggest peaks. Result clamped to 0.3–10 s; at least 1 s when times are whole seconds. Falls back to 2 s with fewer than 30 gaps or one peak; the log says which. Left to check: on a Rallye folder, does `auto` match the best hand-picked gap?
 - **Time cuts, then a visual check.** Cut by time first, then compare the frames on each side of a cut (and inside long groups) and join or split on how alike they look (Kodak patent US6351556; Gozali et al. 2012). Shares the embedding work with "Split on car change". Effort M.
 - **More cameras' sub-second times**: read sub-second timestamps from more makers' metadata
 - **Visual-neighbour fallback**: when times are missing or tied, join frames that look alike

@@ -154,6 +154,76 @@ function M.cluster_by_time(units, gap_seconds)
     return group_of
 end
 
+-- Auto burst gap: a histogram of log10 gaps between consecutive capture times.
+M.AUTO_GAP_MIN_GAPS = 30
+M.AUTO_GAP_BIN = 0.1 -- decades per bin
+M.AUTO_GAP_LOG_RANGE = { -2, 4 } -- 0.01 s to 10000 s; gaps outside land in the end bins
+M.AUTO_GAP_VALLEY = 0.5 -- the valley is at most this share of the smaller peak
+M.AUTO_GAP_CLAMP = { 0.3, 10 }
+
+-- Gaps between consecutive timed units, each camera_key on its own timeline when
+-- by_camera (two bodies shooting at once interleave, so their cross gaps are not bursts).
+local function capture_gaps(units, by_camera)
+    local lines = {}
+    for _, unit in ipairs(units) do
+        if unit.epoch then
+            local k = by_camera and M.camera_key(unit) or ""
+            lines[k] = lines[k] or {}
+            table.insert(lines[k], unit.epoch)
+        end
+    end
+    local gaps = {}
+    for _, epochs in pairs(lines) do
+        table.sort(epochs)
+        for i = 2, #epochs do gaps[#gaps + 1] = epochs[i] - epochs[i - 1] end
+    end
+    return gaps
+end
+
+-- Returns (gap seconds, how) for gap = "auto": the lowest point of the smoothed histogram
+-- between its two biggest peaks, clamped to AUTO_GAP_CLAMP, or M.BURST_GAP_SECONDS when
+-- there are too few gaps or no clear valley. how is "valley", "valley, clamped" or
+-- "fallback: <why>". whole_seconds: times have no sub-second part, so 0 s and 1 s gaps
+-- are one bin and the cut is at least 1 s.
+function M.auto_gap(units, by_camera, whole_seconds)
+    local gaps = capture_gaps(units, by_camera)
+    if #gaps < M.AUTO_GAP_MIN_GAPS then
+        return M.BURST_GAP_SECONDS, string.format("fallback: %d gaps, fewer than %d", #gaps, M.AUTO_GAP_MIN_GAPS)
+    end
+    local lo, hi = M.AUTO_GAP_LOG_RANGE[1], M.AUTO_GAP_LOG_RANGE[2]
+    local n = math.floor((hi - lo) / M.AUTO_GAP_BIN + 0.5)
+    local hist = {}
+    for i = 1, n do hist[i] = 0 end
+    local floor_gap = whole_seconds and 1 or 10 ^ lo
+    for _, g in ipairs(gaps) do
+        local b = math.floor((math.log(math.max(g, floor_gap), 10) - lo) / M.AUTO_GAP_BIN) + 1
+        b = math.min(math.max(b, 1), n)
+        hist[b] = hist[b] + 1
+    end
+    local s = {}
+    for i = 1, n do s[i] = ((hist[i - 1] or 0) + hist[i] + (hist[i + 1] or 0)) / 3 end
+
+    local p1 = 1
+    for i = 2, n do if s[i] > s[p1] then p1 = i end end
+    local p2, cut
+    for i = 1, n do
+        local a, b = math.min(i, p1), math.max(i, p1)
+        if b - a >= 2 and (not p2 or s[i] > s[p2]) then
+            local low = a + 1
+            for j = a + 1, b - 1 do if s[j] < s[low] then low = j end end
+            if s[low] <= M.AUTO_GAP_VALLEY * s[i] then p2, cut = i, low end
+        end
+    end
+    if not p2 then return M.BURST_GAP_SECONDS, "fallback: one peak" end
+    -- centre of the run of equal lowest bins
+    local last = cut
+    while last + 1 < math.max(p1, p2) and s[last + 1] == s[cut] do last = last + 1 end
+    local gap = 10 ^ (lo + ((cut + last) / 2 - 0.5) * M.AUTO_GAP_BIN)
+    local min_gap = whole_seconds and math.max(1, M.AUTO_GAP_CLAMP[1]) or M.AUTO_GAP_CLAMP[1]
+    local clamped = math.min(math.max(gap, min_gap), M.AUTO_GAP_CLAMP[2])
+    return clamped, clamped == gap and "valley" or "valley, clamped"
+end
+
 -- Tag hierarchy uses `|` and the ledger CSV uses `,` and `"`, so those
 -- (plus `;` and control characters) never reach a key.
 function M.sanitize(s)
@@ -265,13 +335,28 @@ local function burst_layer(units, gap, base_of, timing, alone)
     return burst_of
 end
 
--- opts = { gap, timing = bool (default true), camera = bool, tag = string|nil,
--- parent = string|nil, base_of = group_of|nil, alone = bool }. With timing false,
+-- opts = { gap (seconds or "auto"), timing = bool (default true), camera = bool, tag = string|nil,
+-- parent = string|nil, base_of = group_of|nil, alone = bool, whole_seconds = bool }. With timing false,
 -- burst_of is base_of plus one group for the rest, and result.timing is false. With
--- alone, each unit outside base_of gets its own group and result.timing is false.
+-- alone, each unit outside base_of gets its own group and result.timing is false. With
+-- gap "auto" and timing on, result.gap and result.gap_how are M.auto_gap's answer for the
+-- units outside base_of.
 function M.run_layers(units, opts)
     local result = { timing = opts.timing ~= false and not opts.alone }
-    result.burst_of = burst_layer(units, opts.gap, opts.base_of, result.timing, opts.alone)
+    local gap = opts.gap
+    if gap == "auto" then
+        local rest = {}
+        for _, unit in ipairs(units) do
+            if not (opts.base_of and opts.base_of[unit.id] ~= nil) then rest[#rest + 1] = unit end
+        end
+        if result.timing then
+            gap, result.gap_how = M.auto_gap(rest, opts.camera, opts.whole_seconds)
+            result.gap = gap
+        else
+            gap = nil
+        end
+    end
+    result.burst_of = burst_layer(units, gap, opts.base_of, result.timing, opts.alone)
     result.final_of = result.burst_of
     if opts.camera then
         result.camera_of = M.divide(result.final_of, M.camera_key, units)
@@ -554,9 +639,10 @@ local function trim(s)
 end
 
 -- Burst gap from the preference text: a number above 0, `.` or `,` as the decimal
--- mark. Nil for anything else (hex, exponents, signs, blank).
+-- mark, or "auto" (any case) for M.auto_gap. Nil for anything else (hex, exponents, signs, blank).
 function M.parse_gap(s)
     local t = trim(type(s) == "number" and tostring(s) or s):gsub(",", ".")
+    if t:lower() == "auto" then return "auto" end
     if not t:match("^%d*%.?%d*$") or not t:match("%d") then return nil end
     local n = tonumber(t)
     if not n or n <= 0 then return nil end
@@ -564,7 +650,7 @@ function M.parse_gap(s)
 end
 
 M.ERR_NO_OUTPUT = "turn on at least one output (group tags or darktable groups)"
-M.ERR_BAD_GAP = "the burst gap must be a number of seconds above 0, e.g. 2 or 0.5"
+M.ERR_BAD_GAP = "the burst gap must be auto or a number of seconds above 0, e.g. 2 or 0.5"
 
 -- Stored start_from values (combobox order) and their panel labels.
 M.START_FROM = { "time", "tags", "one" }
@@ -574,6 +660,7 @@ M.START_FROM_LABELS = { "capture time", "last run's groups", "one group" }
 M.PRESET_SCHEMA = {
     { key = "start_from", kind = "choice", choices = M.START_FROM, default = "time" },
     { key = "burst_gap_seconds", kind = "number", default = 2 },
+    { key = "burst_gap_auto", kind = "bool", default = false }, -- the gap entry reads "auto"; burst_gap_seconds keeps the last number
     { key = "camera", kind = "bool", default = false },
     { key = "tag", kind = "string", default = "" },
     { key = "parent", kind = "string", default = "" },
@@ -584,7 +671,7 @@ M.PRESET_SCHEMA = {
 
 -- The panel's pages and the preset keys each page's widgets edit (C.page_coverage checks them).
 M.PANEL_PAGES = {
-    { number = 1, title = "start groups", keys = { "start_from", "burst_gap_seconds" } },
+    { number = 1, title = "start groups", keys = { "start_from", "burst_gap_seconds", "burst_gap_auto" } },
     { number = 2, title = "divide groups", keys = { "camera", "tag", "parent" } },
     { number = 3, title = "output", keys = { "native_groups", "write_tags", "trace_tags" } },
     { number = 4, title = "run", keys = {} },
@@ -1406,7 +1493,11 @@ function M.group_images(images, opts)
         end
         job.percent = 0.5
 
+        layer_opts.whole_seconds = precision ~= "subsecond"
         local result = M.run_layers(units, layer_opts)
+        if result.gap_how then
+            log(string.format("auto gap %.2g s (%s)", result.gap, result.gap_how))
+        end
         local wanted = M.wanted_tags(units, result, stamp, layer_opts)
         log(string.format("%d frames in %d groups (%d %s)", #units, count_groups(result.final_of),
             count_groups(result.burst_of), result.timing and "bursts" or "starting groups, timing off"))
@@ -1722,8 +1813,8 @@ local function install_panel()
     start_combo.selected = 1
 
     local gap_entry = dt.new_widget("entry") {
-        tooltip = "Burst gap in seconds: photos taken closer together than this are one burst. Must be above 0. Default: 2. Decimals are allowed (0.5 or 1,5). Lower it for fast bursts that should split; raise it when a burst has pauses.",
-        placeholder = "burst gap (seconds), e.g. 2",
+        tooltip = "Burst gap in seconds: photos taken closer together than this are one burst. Must be above 0. Default: 2. Decimals are allowed (0.5 or 1,5). Lower it for fast bursts that should split; raise it when a burst has pauses. Type auto to pick the gap from the selection's own timing (the log shows the gap it chose; under 30 gaps or no clear split, it uses 2).",
+        placeholder = "burst gap (seconds or auto), e.g. 2",
         text = "2",
     }
     gap_box = dt.new_widget("box") {
@@ -1786,6 +1877,7 @@ local function install_panel()
         notice.visible = (text ~= "")
     end
 
+    local last_gap_number -- the number a preset stored, kept while the entry reads "auto"
     local function read_panel()
         local start_from = M.START_FROM[start_combo.selected]
         local gap = M.parse_gap(gap_entry.text)
@@ -1793,9 +1885,12 @@ local function install_panel()
             if start_from == "time" then return nil, M.ERR_BAD_GAP end
             gap = M.preset_defaults(M.PRESET_SCHEMA).burst_gap_seconds
         end
+        local auto = gap == "auto"
+        if auto then gap = last_gap_number or M.preset_defaults(M.PRESET_SCHEMA).burst_gap_seconds end
         return {
             start_from = start_from,
             burst_gap_seconds = gap,
+            burst_gap_auto = auto,
             camera = camera_check.value,
             tag = tag_entry.text,
             parent = parent_entry.text,
@@ -1806,7 +1901,8 @@ local function install_panel()
     end
 
     local function show_panel(s)
-        gap_entry.text = string.format("%.14g", s.burst_gap_seconds)
+        last_gap_number = s.burst_gap_seconds
+        gap_entry.text = s.burst_gap_auto and "auto" or string.format("%.14g", s.burst_gap_seconds)
         shown_start = s.start_from
         for i, v in ipairs(M.START_FROM) do
             if v == s.start_from and start_combo.selected ~= i then start_combo.selected = i end
