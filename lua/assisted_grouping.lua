@@ -315,8 +315,38 @@ local function each_alone(units)
     return group_of
 end
 
-local function burst_layer(units, gap, base_of, timing, alone)
+-- cluster_by_time on each camera_key's own timeline, so one body's frames never chain
+-- through another's. Cameras are numbered in order of their first capture time, then
+-- by key; groups are dense across them.
+local function cluster_per_camera(units, gap)
+    local lines, keys, first = {}, {}, {}
+    for _, unit in ipairs(units) do
+        local k = M.camera_key(unit)
+        if not lines[k] then
+            lines[k], keys[#keys + 1], first[k] = {}, k, math.huge
+        end
+        table.insert(lines[k], unit)
+        if unit.epoch and unit.epoch < first[k] then first[k] = unit.epoch end
+    end
+    table.sort(keys, function(a, b)
+        if first[a] ~= first[b] then return first[a] < first[b] end
+        return a < b
+    end)
+    local group_of, offset = {}, 0
+    for _, k in ipairs(keys) do
+        local top = 0
+        for id, grp in pairs(M.cluster_by_time(lines[k], gap)) do
+            group_of[id] = offset + grp
+            if grp > top then top = grp end
+        end
+        offset = offset + top
+    end
+    return group_of
+end
+
+local function burst_layer(units, gap, base_of, timing, alone, by_camera)
     local cluster = alone and each_alone
+        or timing and by_camera and function(list) return cluster_per_camera(list, gap) end
         or timing and function(list) return M.cluster_by_time(list, gap) end or one_group
     if not base_of then return cluster(units) end
     local burst_of, rest, max_base = {}, {}, 0
@@ -356,7 +386,7 @@ function M.run_layers(units, opts)
             gap = nil
         end
     end
-    result.burst_of = burst_layer(units, gap, opts.base_of, result.timing, opts.alone)
+    result.burst_of = burst_layer(units, gap, opts.base_of, result.timing, opts.alone, opts.camera)
     result.final_of = result.burst_of
     if opts.camera then
         result.camera_of = M.divide(result.final_of, M.camera_key, units)
@@ -422,20 +452,7 @@ function M.wanted_tags(units, result, stamp, opts)
     return wanted
 end
 
-local GROUP_TAG_PATTERN = "^" .. M.PREFIX:gsub("%p", "%%%0") .. "|(%d%d%d%d%-%d%d%-%d%d %d%d:%d%d:%d%d)|Group|%d+$"
-
--- Stamps are `YYYY-MM-DD HH:MM:SS`, so string order is time order.
-function M.latest_group_tag(have)
-    local best, best_stamp
-    for name in pairs(have or {}) do
-        local stamp = name:match(GROUP_TAG_PATTERN)
-        if stamp and (not best_stamp or stamp > best_stamp
-                or (stamp == best_stamp and name > best)) then
-            best, best_stamp = name, stamp
-        end
-    end
-    return best
-end
+M.latest_group_tag = C.latest_group_tag
 
 -- Units with no group tag are left out of the result.
 function M.base_of_from_tags(units)

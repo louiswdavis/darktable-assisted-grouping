@@ -18,7 +18,7 @@ end
 -- plugin_common.lua ---------------------------------------------------------------
 -- The same file in all three plugin repos; COMMON_HASH pins it. After changing it, copy it to the
 -- other two repos and put the hash this prints into their tests too.
-local COMMON_HASH = "503716c8"
+local COMMON_HASH = "f1505e66"
 local PC = dofile(script_dir .. "/plugin_common.lua")
 local function fnv1a(text)
     local h = 2166136261
@@ -252,6 +252,20 @@ for _, a in ipairs(run_units) do
 end
 check("layers never merge across bursts", merged, false)
 check("all on: every unit has a final group", keys(all.final_of), "1 + 2 + 3 + 4 + 5 + 6")
+
+-- ticket 47: body A at 0,1,3,4 s and body B at 2 s, gap 1.5 s
+local two_bodies = {
+    cu(1, { epoch = 0, model = "a" }), cu(2, { epoch = 1, model = "a" }), cu(3, { epoch = 2, model = "b" }),
+    cu(4, { epoch = 3, model = "a" }), cu(5, { epoch = 4, model = "a" }),
+}
+local per_cam = A.run_layers(two_bodies, { gap = 1.5, camera = true })
+check("camera on: each body's bursts are found on its own timeline",
+    table.concat({ per_cam.burst_of[1], per_cam.burst_of[2], per_cam.burst_of[3], per_cam.burst_of[4], per_cam.burst_of[5] }, ","),
+    "1,1,3,2,2")
+local one_line = A.run_layers(two_bodies, { gap = 1.5 })
+check("camera off: one timeline chains all five frames",
+    table.concat({ one_line.burst_of[1], one_line.burst_of[2], one_line.burst_of[3], one_line.burst_of[4], one_line.burst_of[5] }, ","),
+    "1,1,1,1,1")
 
 local based = A.run_layers({ cu(1, { epoch = 0 }), cu(2, { epoch = 100 }), cu(3, { epoch = 0 }) },
     { gap = 2, base_of = { [1] = 1, [2] = 2 } })
