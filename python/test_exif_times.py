@@ -115,7 +115,7 @@ def run_tests():
             f.write(b"II*\x00garbage")
         check("junk ARW -> None", E.read_capture_epoch(junk), None)
 
-        odd_dir = os.path.join(tmp, 'a, "b"')
+        odd_dir = os.path.join(tmp, "a, 'b'" if os.name == "nt" else 'a, "b"')  # Windows forbids " in a name
         os.makedirs(odd_dir)
         odd = os.path.join(odd_dir, "odd.jpg")
         write_jpeg(odd, {DATE_TIME_ORIGINAL: "2026:06:01 14:30:00", SUBSEC_TIME_ORIGINAL: "47"})
