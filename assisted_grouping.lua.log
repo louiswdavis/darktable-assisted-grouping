@@ -1,0 +1,9 @@
+[2026-11-17 00:25:56] check_button Apply darktable groups
+...ppData\Local\darktable/lua/contrib/assisted_grouping.lua:1911: attempt to call a nil value (upvalue 'refresh_notice')
+stack traceback:
+	...ppData\Local\darktable/lua/contrib/assisted_grouping.lua:1911: in function <...ppData\Local\darktable/lua/contrib/assisted_grouping.lua:1911>
+	[C]: in function 'xpcall'
+	...lugins/darktable-assisted-grouping/lua/plugin_common.lua:267: in function <...lugins/darktable-assisted-grouping/lua/plugin_common.lua:266>
+	(...tail calls...)
+	[C]: in ?
+
