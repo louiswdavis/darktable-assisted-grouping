@@ -1907,7 +1907,6 @@ local function install_panel()
     local native_check = new_widget("check_button") {
         label = "Apply darktable groups",
         tooltip = "Default, quick output. Make one darktable group per final group of two or more photos. Photos already in a group you made by hand are skipped. Once this step starts, cancel is ignored so no group is left half-built.",
-        value = true,
         clicked_callback = function() changed(); refresh_notice() end,
     }
     local tags_check = new_widget("check_button") {
