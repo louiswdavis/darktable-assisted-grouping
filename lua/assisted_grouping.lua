@@ -1106,6 +1106,10 @@ local TMP_DIR = dt.configuration.tmp_dir
 C.sweep_temp(TMP_DIR, "dt_assisted_grouping_", 86400)
 local LOG_PATH = dt.configuration.config_dir .. "/assisted_grouping.log"
 local PREV_LOG_PATH = dt.configuration.config_dir .. "/assisted_grouping.prev.log"
+-- Lua errors (panel build, callbacks, events) go to their own log, which runs never rotate.
+local LUA_LOG_PATH = dt.configuration.config_dir .. "/assisted_grouping.lua.log"
+local guard = C.error_guard(dt, LUA_LOG_PATH, "Assisted Grouping")
+local new_widget = C.guarded_widget_maker(dt, guard)
 local LEDGER_DIR = dt.configuration.config_dir .. "/assisted_grouping"
 local LEDGER_PATH = LEDGER_DIR .. "/ledger.csv"
 local LIB_KEY = C.library_key(dt)
@@ -1859,7 +1863,7 @@ local function install_panel()
     -- changed_callback fires on every `selected` assignment, so act only when the value differs.
     local shown_start = "time"
     local gap_box
-    local start_combo = dt.new_widget("combobox") {
+    local start_combo = new_widget("combobox") {
         label = "start from",
         tooltip = "capture time: a new group starts when the gap to the previous photo is longer than the burst gap. last run's groups: each photo's group tag from the latest earlier run; photos without one share one group. one group: every photo starts together and only the divide layers split it.",
         changed_callback = function(widget)
@@ -1874,45 +1878,45 @@ local function install_panel()
     }
     start_combo.selected = 1
 
-    local gap_entry = dt.new_widget("entry") {
+    local gap_entry = new_widget("entry") {
         tooltip = "Burst gap in seconds: photos taken closer together than this are one burst. Must be above 0. Default: 2. Decimals are allowed (0.5 or 1,5). Lower it for fast bursts that should split; raise it when a burst has pauses. Type auto to pick the gap from the selection's own timing (the log shows the gap it chose; under 30 gaps or no clear split, it uses 2).",
         placeholder = "burst gap (seconds or auto), e.g. 2",
         text = "2",
     }
-    gap_box = dt.new_widget("box") {
+    gap_box = new_widget("box") {
         orientation = "vertical",
-        dt.new_widget("label") { label = "burst gap (seconds)", halign = "start" },
+        new_widget("label") { label = "burst gap (seconds)", halign = "start" },
         gap_entry,
     }
-    local camera_check = dt.new_widget("check_button") {
+    local camera_check = new_widget("check_button") {
         label = "Camera and lens",
         tooltip = "Divide each group by camera maker, model and lens.",
         value = false,
         clicked_callback = function() changed(); refresh_notice() end,
     }
-    local tag_entry = dt.new_widget("entry") {
+    local tag_entry = new_widget("entry") {
         tooltip = "Divide each group into photos that carry exactly this tag and photos that don't (child tags don't count). Empty = off. Example: Cars|Red.",
         placeholder = "tag, e.g. Cars|Red",
         text = "",
     }
-    local parent_entry = dt.new_widget("entry") {
+    local parent_entry = new_widget("entry") {
         tooltip = "Divide each group by which tag directly under this node a photo carries. Photos with none, or several, aren't split by it (the log counts them). Empty = off. Example: Rally|2026. Use the Assisted Tagging prefix to split bursts by car.",
         placeholder = "parent tag, e.g. Cars|Number",
         text = "",
     }
-    local native_check = dt.new_widget("check_button") {
+    local native_check = new_widget("check_button") {
         label = "Apply darktable groups",
         tooltip = "Default, quick output. Make one darktable group per final group of two or more photos. Photos already in a group you made by hand are skipped. Once this step starts, cancel is ignored so no group is left half-built.",
         value = true,
         clicked_callback = function() changed(); refresh_notice() end,
     }
-    local tags_check = dt.new_widget("check_button") {
+    local tags_check = new_widget("check_button") {
         label = "Group tags",
         tooltip = "Tag each photo with its Group under Assisted Grouping|<run time>|Group|... One tag per final group. Needed for last run's groups and browse as bursts.",
         value = false,
         clicked_callback = function() changed(); refresh_notice() end,
     }
-    local trace_check = dt.new_widget("check_button") {
+    local trace_check = new_widget("check_button") {
         label = "Layer trace tags",
         tooltip = "Also write the Burst, Camera, Tag and Parent tags that show which layer split each group. Written only when Group tags is on. Off by default; slower on a large selection.",
         value = false,
@@ -1932,7 +1936,7 @@ local function install_panel()
         }
     end
 
-    notice = dt.new_widget("label") { label = "", halign = "start", visible = false }
+    notice = new_widget("label") { label = "", halign = "start", visible = false }
     refresh_notice = function()
         local text = M.panel_notice(panel_state())
         notice.label = text
@@ -1984,7 +1988,7 @@ local function install_panel()
         return M.panel_options(panel_state())
     end
 
-    local group_button = dt.new_widget("button") {
+    local group_button = new_widget("button") {
         label = "Group selection",
         tooltip = "Group the selected photos by the layers above. Cancel from the progress bar: before anything is written it changes nothing, while tags are being written it stops partway (partial tags stay), and once darktable groups have started it is ignored.",
         clicked_callback = function()
@@ -1999,11 +2003,11 @@ local function install_panel()
             M.group_images(images, opts)
         end,
     }
-    local warning_label = dt.new_widget("label") {
+    local warning_label = new_widget("label") {
         label = PARTIAL_BURST_WARNING,
         halign = "start",
     }
-    local clear_button = dt.new_widget("button") {
+    local clear_button = new_widget("button") {
         label = "Clear grouping marks",
         tooltip = "Remove the group tags and darktable groups this plugin made from the selected photos. Tags and groups you made by hand stay.",
         clicked_callback = function()
@@ -2012,7 +2016,7 @@ local function install_panel()
             M.clear_marks(images)
         end,
     }
-    local bursts_button = dt.new_widget("button") {
+    local bursts_button = new_widget("button") {
         label = "bursts",
         tooltip = "Put the selected photos back into their burst groups from the latest run's group tags. No capture times are read. Run Group selection with Group tags on first.",
         clicked_callback = function()
@@ -2021,7 +2025,7 @@ local function install_panel()
             M.browse_bursts(images)
         end,
     }
-    local pairs_button = dt.new_widget("button") {
+    local pairs_button = new_widget("button") {
         label = "pairs",
         tooltip = "Take the selected photos, and everything grouped with them, out of their darktable groups, then stack each RAW with its JPEG again, as at import. Hand-made groups are reset too. Group tags stay, so Group selection brings the burst groups back.",
         clicked_callback = function()
@@ -2065,23 +2069,23 @@ local function install_panel()
         { start_combo, gap_box },
         {
             camera_check,
-            dt.new_widget("label") { label = "Tag", halign = "start" },
+            new_widget("label") { label = "Tag", halign = "start" },
             tag_entry,
-            dt.new_widget("label") { label = "Parent tag", halign = "start" },
+            new_widget("label") { label = "Parent tag", halign = "start" },
             parent_entry,
         },
         {
-            dt.new_widget("section_label") { label = "outputs" },
+            new_widget("section_label") { label = "outputs" },
             native_check,
             tags_check,
-            dt.new_widget("section_label") { label = "how it decided" },
+            new_widget("section_label") { label = "how it decided" },
             trace_check,
         },
         {
             group_button,
-            dt.new_widget("box") {
+            new_widget("box") {
                 orientation = "horizontal",
-                dt.new_widget("label") { label = "browse as", halign = "start" },
+                new_widget("label") { label = "browse as", halign = "start" },
                 bursts_button,
                 pairs_button,
             },
@@ -2093,7 +2097,7 @@ local function install_panel()
         pages[i] = { number = page.number, title = page.title, widgets = page_widgets[i] }
     end
 
-    local panel_box = dt.new_widget("box") {
+    local panel_box = new_widget("box") {
         orientation = "vertical",
         reset_callback = function()
             show_panel(M.preset_defaults(M.PRESET_SCHEMA))
@@ -2138,14 +2142,18 @@ M.metadata = {
 
 if dt.gui then
     if dt.gui.current_view().id == "lighttable" then
-        install_panel()
-        restart()
+        guard("panel install", function()
+            install_panel()
+            restart()
+        end)
     else
         if not M.event_registered then
             dt.register_event("assisted_grouping", "view-changed", function(event, old_view, new_view)
                 if new_view.name == "lighttable" or new_view.id == "lighttable" then
-                    install_panel()
-                    restart()
+                    guard("panel install", function()
+                        install_panel()
+                        restart()
+                    end)
                 end
             end)
             M.event_registered = true
