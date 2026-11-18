@@ -1633,6 +1633,7 @@ function M.group_images(images, opts)
             return
         end
         run.ledger = read_ledger()
+        run.selected = C.hide_selection(dt, log)
         -- The job bar's second half is the writes: tags, then darktable groups.
         local tags_share = not opts.write_tags and 0 or opts.native_groups and 0.25 or 0.5
         if opts.write_tags then
@@ -1659,6 +1660,7 @@ function M.group_images(images, opts)
 
     -- Saved once anything may have changed, even if the apply stopped or errored partway,
     -- so what this run made isn't mistaken for the user's next time.
+    C.restore_selection(dt, run.selected)
     if run.applying then write_ledger(run.ledger) end
     end_job(job)
     busy = false
@@ -1683,6 +1685,7 @@ function M.clear_marks(images)
     busy = true
     start_log("clear", #images)
     local job, ledger, changed = nil, nil, false
+    local selected
     local okr, err = pcall(function()
         job = start_job("Clear grouping marks", #images)
         ledger = read_ledger()
@@ -1705,6 +1708,7 @@ function M.clear_marks(images)
         local write, n_tags, n_ungrouped = w.write, 0, 0
 
         changed = true
+        selected = C.hide_selection(dt, log)
         local plans, restore = M.plan_clear(records, ledger, members_of)
         local plan_of, plan_ids = {}, {}
         for _, plan in ipairs(plans) do
@@ -1769,6 +1773,7 @@ function M.clear_marks(images)
         end
     end)
 
+    C.restore_selection(dt, selected)
     if changed then write_ledger(ledger) end
     end_job(job)
     busy = false

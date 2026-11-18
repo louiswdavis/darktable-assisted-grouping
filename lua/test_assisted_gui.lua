@@ -83,7 +83,10 @@ local PREF_EMPTY = { string = "", directory = "", file = "", integer = 0, float 
 local group_error = nil -- set to make every darktable group change fail
 local group_writes, group_reads = 0, 0
 
-local dt = {
+-- how many images were selected at each tag attach
+local selected_at_attach = {}
+local dt
+dt = {
     configuration = { tmp_dir = ROOT .. "/tmp", config_dir = ROOT .. "/config", version = "test", running_os = WINDOWS and "windows" or "macos" },
     gettext = { gettext = function(msgid) return msgid end },
     preferences = {
@@ -106,6 +109,7 @@ local dt = {
             return tags_by_name[name]
         end,
         attach = function(tag, img)
+            selected_at_attach[#selected_at_attach + 1] = #dt.gui.action_images
             for _, have in ipairs(img.tags) do
                 if have == tag then return end
             end
@@ -132,7 +136,11 @@ local dt = {
     gui = {
         libs = {},
         views = { lighttable = {} },
-        selection = function() return {} end,
+        selection = function(images)
+            local previous = dt.gui.action_images
+            if images then dt.gui.action_images = images end
+            return previous
+        end,
         action_images = {},
         current_view = function() return { id = "lighttable" } end,
         create_job = function(title)
@@ -266,7 +274,11 @@ PYTHON.exit = 0
 
 -- Group tags on, as the panel's checkbox sets it
 prints, jobs, PYTHON.runs = {}, {}, {}
+selected_at_attach = {}
 G.group_images(all, { timing = true, gap = 2, camera = false, refine = false, write_tags = true, trace_tags = false, native_groups = true })
+check("group with tags: tags were attached", #selected_at_attach > 0, true)
+check("group with tags: nothing is selected while they are attached", math.max(0, table.unpack(selected_at_attach)), 0)
+check("group with tags: the selection is back at the end", dt.gui.action_images, all)
 check("group with tags: every image gets one group tag",
     group_tag_count(jpeg1) + group_tag_count(jpeg2) + group_tag_count(jpeg3) + group_tag_count(raw1), 4)
 check("group with tags: the burst shares its tag", jpeg1.tags[1] == jpeg2.tags[1] and jpeg1.tags[1] == raw1.tags[1], true)
