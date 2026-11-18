@@ -81,10 +81,11 @@ local prints, jobs, images_by_id, tags_by_name, panel = {}, {}, {}, {}, nil
 local prefs = { ["assisted_plugins/plugins_root"] = ROOT .. "/plugins" }
 local PREF_EMPTY = { string = "", directory = "", file = "", integer = 0, float = 0, bool = false }
 local group_error = nil -- set to make every darktable group change fail
+local selection_error = nil -- set to make darktable refuse to select images again
 local group_writes, group_reads = 0, 0
 
--- how many images were selected at each tag attach
-local selected_at_attach = {}
+-- how many images were selected at each tag attach and detach
+local selected_at_attach, selected_at_detach = {}, {}
 local dt
 dt = {
     configuration = { tmp_dir = ROOT .. "/tmp", config_dir = ROOT .. "/config", version = "test", running_os = WINDOWS and "windows" or "macos" },
@@ -116,6 +117,7 @@ dt = {
             img.tags[#img.tags + 1] = tag
         end,
         detach = function(tag, img)
+            selected_at_detach[#selected_at_detach + 1] = #dt.gui.action_images
             for i, have in ipairs(img.tags) do
                 if have == tag then table.remove(img.tags, i); return end
             end
@@ -138,6 +140,7 @@ dt = {
         views = { lighttable = {} },
         selection = function(images)
             local previous = dt.gui.action_images
+            if images and #images > 0 and selection_error then error(selection_error, 0) end
             if images then dt.gui.action_images = images end
             return previous
         end,
@@ -214,6 +217,26 @@ local function button(widget, label)
     return nil
 end
 
+local function check_button(widget, label)
+    if type(widget) ~= "table" then return nil end
+    if widget.kind == "check_button" and widget.label == label then return widget end
+    for _, child in ipairs(widget) do
+        local found = check_button(child, label)
+        if found then return found end
+    end
+    return nil
+end
+
+local function entry(widget, placeholder)
+    if type(widget) ~= "table" then return nil end
+    if widget.kind == "entry" and widget.placeholder == placeholder then return widget end
+    for _, child in ipairs(widget) do
+        local found = entry(child, placeholder)
+        if found then return found end
+    end
+    return nil
+end
+
 -- The selected images are read at the click, as in darktable.
 local function click(label, images)
     prints, jobs, PYTHON.runs = {}, {}, {}
@@ -244,6 +267,9 @@ local jpeg2 = image(2, "DSC00002.JPG", "2026:05:01 10:00:00")
 local jpeg3 = image(3, "DSC00003.JPG", "2026:05:01 10:00:30")
 local raw1 = image(4, "DSC00001.ARW", "2026:05:01 10:00:00")
 local all = { jpeg1, jpeg2, jpeg3, raw1 }
+-- The lens zooms from 70 to 200 mm inside the burst; focus distance 0 is darktable's "unknown".
+jpeg1.exif_focal_length, jpeg1.exif_exposure, jpeg1.exif_focus_distance = 70, 0.001, 0
+jpeg2.exif_focal_length, jpeg2.exif_exposure, jpeg2.exif_focus_distance = 200, 0.001, 0
 local epoch = G.exif_time_to_epoch("2026:05:01 10:00:00")
 PYTHON.results = string.format("1,%d.10\n2,%d.60\n3,%d.00\n#precision,subsecond\n", epoch, epoch, epoch + 30)
 
@@ -265,12 +291,90 @@ check("group: the burst and the RAW share a darktable group", jpeg2.group == jpe
 check("group: the later frame stays alone", jpeg3.group ~= jpeg1.group, true)
 check("group, tags off: no tag is written", group_tag_count(jpeg1), 0)
 check("group: no Lua error", lua_errors(), nil)
+local group_log = read_file(ROOT .. "/config/assisted_grouping.log")
+check("group: the log heads the weakest links",
+    group_log:find("weakest links: largest time gap inside each of 1 groups, widest first (top 1)", 1, true) ~= nil, true)
+check("group: the log names the burst's largest gap and the frame after it",
+    group_log:find("  group 0001: 2 frames, 0.50 s before DSC00002.JPG", 1, true) ~= nil, true)
+check("group: the log lists the focal-length jump inside the burst as a cut hint",
+    group_log:find("cut hints: 1 places inside a group where a lens or exposure setting jumps (first 1)\n", 1, true) ~= nil
+        and group_log:find("  group 0001 before DSC00002.JPG: focal length 70 to 200 mm\n", 1, true) ~= nil, true)
+
+-- Minimum burst size 3: the two-frame burst is left as single frames; the RAW still stacks.
+local min_entry = entry(panel, "minimum burst size (frames), e.g. 2")
+min_entry.text = "3"
+click("Group selection", all)
+check("minimum 3: the two-frame burst is not grouped", jpeg2.group ~= jpeg1.group, true)
+check("minimum 3: the RAW stays stacked with its JPEG", raw1.group, jpeg1.group)
+check("minimum 3: the toast counts single frames as groups",
+    last_print():find("done. 4 images in 3 groups (sub-second timing)", 1, true) ~= nil, true)
+check("minimum 3: the log counts the groups left apart",
+    read_file(ROOT .. "/config/assisted_grouping.log"):find("minimum burst size 3: 1 smaller groups left as single frames", 1, true) ~= nil, true)
+min_entry.text = "1"
+click("Group selection", all)
+check("minimum 1: the run refuses", last_print(), "Assisted Grouping: " .. G.ERR_BAD_MIN_SIZE)
+check("minimum 1: no job bar", #jobs, 0)
+min_entry.text = "2"
+
+-- Session gap 0.2 minutes with Group tags on: the frame 30 s later starts session 2.
+local session_entry = entry(panel, "session gap (minutes), 0 = off")
+local tags_check = check_button(panel, "Group tags")
+session_entry.text = "0.2"
+click("Group selection", all)
+check("sessions, Group tags off: no tag is written", group_tag_count(jpeg1), 0)
+tags_check.value = true
+click("Group selection", all)
+local function session_tag(img)
+    for _, tag in ipairs(img.tags) do
+        local n = tag.name:match("^Assisted Grouping|[^|]+|Session|(%d+)$")
+        if n then return n end
+    end
+    return nil
+end
+check("sessions: the burst, its RAW and the later frame get their Session tags",
+    string.format("%s %s %s %s", session_tag(jpeg1), session_tag(raw1), session_tag(jpeg2), session_tag(jpeg3)), "0001 0001 0001 0002")
+check("sessions: each image has its Group and its Session tag", group_tag_count(jpeg1) + group_tag_count(jpeg3), 4)
+check("sessions: the log counts them",
+    read_file(ROOT .. "/config/assisted_grouping.log"):find("sessions: 2 (a new one after a gap above 0.2 minutes)", 1, true) ~= nil, true)
+check("sessions: the settings line carries the minimum burst size and the session gap",
+    read_file(ROOT .. "/config/assisted_grouping.log"):match("run stamp [^\n]*, (min frames [^,]*, session gap [^,]*),"), "min frames 2, session gap 12.0 s")
+session_entry.text = "0"
+click("Group selection", all)
+check("sessions off again: the Session tags are gone, Group stays", tostring(session_tag(jpeg1)) .. " " .. group_tag_count(jpeg1), "nil 1")
+tags_check.value = false
+click("Clear grouping marks", all)
+click("Group selection", all)
 
 PYTHON.exit = 1
 click("Group selection", all)
 check("group, helper failed: still groups, on whole seconds",
     last_print():find("done. 4 images in 2 groups (whole-second timing)", 1, true) ~= nil, true)
 PYTHON.exit = 0
+
+-- darktable refuses to put the selection back: the job still ends and the ledger is saved.
+local function ledger_text()
+    return read_file(ROOT .. "/config/assisted_grouping/ledger.csv") or ""
+end
+selection_error = "selection refused"
+tags_check.value = true
+click("Group selection", all)
+check("group, selection not restored: one toast says so",
+    printed("Assisted Grouping: couldn't restore the selection: selection refused"), true)
+check("group, selection not restored: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
+check("group, selection not restored: the ledger has the run's tags",
+    group_tag_count(jpeg1) == 1 and ledger_text():find(jpeg1.tags[1].name, 1, true) ~= nil, true)
+click("Clear grouping marks", all)
+check("clear, selection not restored: it wasn't held up by the last job", printed("another job is still running"), false)
+check("clear, selection not restored: one toast says so",
+    printed("Assisted Grouping: couldn't restore the selection: selection refused"), true)
+check("clear, selection not restored: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
+check("clear, selection not restored: the ledger forgets the cleared tags",
+    group_tag_count(jpeg1) == 0 and ledger_text():find("Assisted Grouping|", 1, true) == nil, true)
+selection_error = nil
+tags_check.value = false
+click("Group selection", all)
+check("after a selection that wasn't restored: the next job runs", printed("another job is still running"), false)
+check("after a selection that wasn't restored: no Lua error", lua_errors(), nil)
 
 -- Group tags on, as the panel's checkbox sets it
 prints, jobs, PYTHON.runs = {}, {}, {}
@@ -345,7 +449,11 @@ click("pairs", { jpeg1 })
 check("pairs, darktable refuses: one toast with the count and the cause", last_print(),
     "Assisted Grouping: reset 3 images to 0 RAW+JPEG pairs, but 3 group changes failed (database is locked). Reset again to retry. Tags kept.")
 check("pairs, darktable refuses: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
+selected_at_detach = {}
 click("Clear grouping marks", all)
+check("clear: tags were detached", #selected_at_detach > 0, true)
+check("clear: nothing is selected while they are detached", math.max(0, table.unpack(selected_at_detach)), 0)
+check("clear: the selection is back at the end", dt.gui.action_images, all)
 check("clear, darktable refuses: one toast with the count and the cause", last_print(),
     "Assisted Grouping: cleared grouping marks from 4 images, but 3 marks couldn't be cleared (database is locked). Clear again to retry.")
 check("clear, darktable refuses: the tags it could detach are gone", group_tag_count(jpeg1), 0)

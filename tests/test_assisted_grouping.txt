@@ -77,6 +77,20 @@ ok   camera on: each body's bursts are found on its own timeline
 ok   camera off: one timeline chains all five frames
 ok   base_of keeps its groups
 ok   unit outside base_of is numbered after the base groups
+ok   min_frames 2: final_of is still burst_of
+ok   min_frames 2: groups as without it
+ok   min_frames unset: groups as with 2
+ok   min_frames 3: the pair is left as single frames, numbered densely
+ok   min_frames 3: final_of is min_of, burst_of keeps the pair
+ok   min_frames 3: one group of 2+ was dissolved
+ok   min_frames 4: nothing is big enough
+ok   min_frames counts the final group, after the divide layers
+ok   weakest_links: widest gap first, by capture time; frames counts untimed ones; groups under two timed frames left out
+ok   weakest_links: no groups of two, no links
+ok   cut_hints: jumps by group then capture time; small moves, untimed frames and missing settings skipped
+ok   cut_hints: a jump across two groups is no hint
+ok   build_images: zero EXIF settings are unknown, and the pair's other file fills them
+ok   dissolve_small: old group order, then unit order
 ok   group_tag pads the final group number
 ok   group_tag pads the burst number
 ok   group_tag uses the label for Camera
@@ -85,6 +99,16 @@ ok   wanted_tags: trace on writes the layer trace tags
 ok   wanted_tags: absent tag and child read not/none
 ok   wanted_tags: trace off writes Group only
 ok   wanted_tags: timing alone writes Group only (Burst would be identical)
+ok   wanted_tags: minimum burst size 3 with trace on writes Burst beside Group
+ok   wanted_tags: minimum burst size 2 is no layer, so no Burst
+ok   wanted_tags: minimum burst size 3 without timing writes no Burst
+ok   sessions_of: a gap above the session gap starts a new session; untimed frames have none
+ok   sessions_of: a gap equal to the session gap does not split
+ok   run_layers: no session_gap, no session_of
+ok   run_layers: session_gap leaves the groups alone
+ok   wanted_tags: a timed frame gets Group and Session, trace off
+ok   wanted_tags: an untimed frame gets no Session
+ok   latest_group_tag ignores Session tags
 ok   latest_group_tag picks the later stamp
 ok   latest_group_tag returns nil with none
 ok   latest_group_tag ignores another prefix
@@ -154,6 +178,17 @@ ok   panel_options: no layer and no refine refuses
 ok   panel_options: refine alone is enough
 ok   panel_options: gap parsed, tag trimmed, trailing | dropped from parent
 ok   panel_options: blank tag and parent become nil
+ok   panel_options: minimum burst size 2 by default text
+ok   panel_options: minimum burst size parsed
+ok   panel_options: minimum burst size under 2 refuses
+ok   panel_options: bad minimum refuses with timing off too
+ok   parse_min_size: whole numbers of 2 or more only
+ok   parse_min_size: a number from a preset
+ok   panel_options: session gap off by default
+ok   panel_options: session gap 0 is off
+ok   panel_options: session gap minutes become seconds
+ok   panel_options: bad session gap refuses
+ok   parse_session_gap: blank and 0 are off, numbers above 0 pass
 ok   start_from_of: refine wins
 ok   start_from_of: timing off
 ok   start_from_of: nil keys default to time
@@ -174,6 +209,11 @@ ok   NOTICE_TAGS_OFF names Group tags
 ok   panel_notice: fine is empty
 ok   panel_notice: both outputs off
 ok   panel_notice: bad gap with capture time
+ok   panel_notice: bad minimum burst size
+ok   panel_notice: bad session gap
+ok   panel_notice: session gap with Group tags on is fine
+ok   panel_notice: session gap without Group tags
+ok   panel_notice: bad gap comes before a bad minimum
 ok   panel_notice: bad gap ignored with one group
 ok   panel_notice: tags source without write tags
 ok   panel_notice: tags source counts as a layer
@@ -290,6 +330,9 @@ ok   preset name quote
 ok   preset order
 ok   preset order empty
 ok   preset schema: defaults
+ok   preset schema: min_burst_size and session_gap_minutes survive a save and load
+ok   preset schema: a preset without min_burst_size loads as 2
+ok   README quotes the bad-gap, bad-minimum and session messages
 ok   preset schema: start_from accepts only its choices
 ok   preset schema: decimal gap kept
 ok   PANEL_PAGES: every preset key is on one page or listed off-stack

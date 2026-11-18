@@ -109,7 +109,7 @@ function M.collapse(images)
         table.sort(unit.members, function(a, b) return a.id < b.id end)
         unit.id = unit.members[1].id
         -- Lowest-id member first; later members fill fields it lacks.
-        for _, field in ipairs({ "epoch", "maker", "model", "lens" }) do
+        for _, field in ipairs({ "epoch", "maker", "model", "lens", "focal", "exposure", "focus" }) do
             for _, member in ipairs(unit.members) do
                 if member[field] ~= nil then
                     unit[field] = member[field]
@@ -373,12 +373,42 @@ local function burst_layer(units, gap, base_of, timing, alone, by_camera)
     return burst_of
 end
 
+-- Groups of fewer than min_frames units are dissolved: each of their units gets a group of
+-- its own. New numbers are dense from 1, by old group then unit order. Also returns how
+-- many groups of 2+ units were dissolved.
+function M.dissolve_small(group_of, units, min_frames)
+    local size, olds = {}, {}
+    for _, unit in ipairs(units) do
+        local old = group_of[unit.id]
+        if not size[old] then olds[#olds + 1] = old end
+        size[old] = (size[old] or 0) + 1
+    end
+    table.sort(olds)
+    local first, next_group, dissolved = {}, 0, 0
+    for _, old in ipairs(olds) do
+        first[old] = next_group + 1
+        local small = size[old] < min_frames
+        next_group = next_group + (small and size[old] or 1)
+        if small and size[old] > 1 then dissolved = dissolved + 1 end
+    end
+    local out, used = {}, {}
+    for _, unit in ipairs(units) do
+        local old = group_of[unit.id]
+        out[unit.id] = first[old] + (used[old] or 0)
+        if size[old] < min_frames then used[old] = (used[old] or 0) + 1 end
+    end
+    return out, dissolved
+end
+
 -- opts = { gap (seconds or "auto"), timing = bool (default true), camera = bool, tag = string|nil,
--- parent = string|nil, base_of = group_of|nil, alone = bool, whole_seconds = bool }. With timing false,
+-- parent = string|nil, base_of = group_of|nil, alone = bool, whole_seconds = bool,
+-- min_frames = number|nil, session_gap = seconds|nil }. With timing false,
 -- burst_of is base_of plus one group for the rest, and result.timing is false. With
 -- alone, each unit outside base_of gets its own group and result.timing is false. With
 -- gap "auto" and timing on, result.gap and result.gap_how are M.auto_gap's answer for the
--- units outside base_of.
+-- units outside base_of. With min_frames above 2, result.min_of is the last layer
+-- (M.dissolve_small) and result.dissolved its count. With session_gap, result.session_of
+-- is M.sessions_of's answer; it splits no group.
 function M.run_layers(units, opts)
     local result = { timing = opts.timing ~= false and not opts.alone }
     local gap = opts.gap
@@ -408,17 +438,138 @@ function M.run_layers(units, opts)
         result.parent_of = M.divide(result.final_of, M.parent_key(opts.parent), units)
         result.final_of = result.parent_of
     end
+    if opts.min_frames and opts.min_frames > 2 then
+        result.min_of, result.dissolved = M.dissolve_small(result.final_of, units, opts.min_frames)
+        result.final_of = result.min_of
+    end
+    if opts.session_gap then result.session_of = M.sessions_of(units, opts.session_gap) end
     return result
 end
+
+-- Sessions sit above the groups: timed units in capture order, a new session when the gap
+-- to the previous one is longer than gap_seconds. Units with no capture time are left out.
+function M.sessions_of(units, gap_seconds)
+    local timed = {}
+    for _, unit in ipairs(units) do
+        if unit.epoch then timed[#timed + 1] = unit end
+    end
+    table.sort(timed, function(a, b)
+        if a.epoch ~= b.epoch then return a.epoch < b.epoch end
+        return a.id < b.id
+    end)
+    local session_of, session = {}, 0
+    for i, unit in ipairs(timed) do
+        if i == 1 or unit.epoch - timed[i - 1].epoch > gap_seconds then session = session + 1 end
+        session_of[unit.id] = session
+    end
+    return session_of
+end
+
+-- Each group's weakest link: its largest capture-time gap between neighbouring frames.
+-- Returns { { group, frames, gap, after = the unit that follows the gap } }, widest gap
+-- first, for groups with two or more timed frames. `frames` is the group's size, untimed
+-- frames included.
+function M.weakest_links(units, group_of)
+    local by_group, numbers, size = {}, {}, {}
+    for _, unit in ipairs(units) do
+        local group = group_of[unit.id]
+        size[group] = (size[group] or 0) + 1
+        if unit.epoch then
+            if not by_group[group] then
+                by_group[group] = {}
+                numbers[#numbers + 1] = group
+            end
+            table.insert(by_group[group], unit)
+        end
+    end
+    local links = {}
+    for _, group in ipairs(numbers) do
+        local timed = by_group[group]
+        if #timed >= 2 then
+            table.sort(timed, function(a, b)
+                if a.epoch ~= b.epoch then return a.epoch < b.epoch end
+                return a.id < b.id
+            end)
+            local link = { group = group, frames = size[group], gap = -1 }
+            for i = 2, #timed do
+                local gap = timed[i].epoch - timed[i - 1].epoch
+                if gap > link.gap then link.gap, link.after = gap, timed[i] end
+            end
+            links[#links + 1] = link
+        end
+    end
+    table.sort(links, function(a, b)
+        if a.gap ~= b.gap then return a.gap > b.gap end
+        return a.group < b.group
+    end)
+    return links
+end
+
+M.WEAKEST_LINKS_LOGGED = 10
+
+-- How far a setting must move between neighbouring frames to count as a jump: the larger
+-- value over the smaller. Exposure 4 is two stops.
+M.CUT_HINT_RATIO = { focal = 1.5, exposure = 4, focus = 2 }
+
+local function exposure_text(seconds)
+    if seconds < 1 then return string.format("1/%.0f", 1 / seconds) end
+    return string.format("%.14g", seconds)
+end
+
+local CUT_HINT_FIELDS = {
+    { key = "focal", text = function(a, b) return string.format("focal length %.14g to %.14g mm", a, b) end },
+    { key = "exposure", text = function(a, b) return "exposure " .. exposure_text(a) .. " to " .. exposure_text(b) .. " s" end },
+    { key = "focus", text = function(a, b) return string.format("focus distance %.14g to %.14g m", a, b) end },
+}
+
+-- Places inside a group where focal length, exposure time or focus distance jumps between
+-- neighbouring frames in capture order: a sign the group may hold two bursts. Returns
+-- { { group, after = the unit that follows the jump, jumps = { text, ... } } } by group,
+-- then capture time. Untimed frames, and a setting either neighbour lacks, are skipped.
+function M.cut_hints(units, group_of)
+    local by_group, numbers = {}, {}
+    for _, unit in ipairs(units) do
+        if unit.epoch then
+            local group = group_of[unit.id]
+            if not by_group[group] then
+                by_group[group] = {}
+                numbers[#numbers + 1] = group
+            end
+            table.insert(by_group[group], unit)
+        end
+    end
+    table.sort(numbers)
+    local hints = {}
+    for _, group in ipairs(numbers) do
+        local timed = by_group[group]
+        table.sort(timed, function(a, b)
+            if a.epoch ~= b.epoch then return a.epoch < b.epoch end
+            return a.id < b.id
+        end)
+        for i = 2, #timed do
+            local jumps = {}
+            for _, field in ipairs(CUT_HINT_FIELDS) do
+                local a, b = timed[i - 1][field.key], timed[i][field.key]
+                if a and b and math.max(a, b) / math.min(a, b) >= M.CUT_HINT_RATIO[field.key] then
+                    jumps[#jumps + 1] = field.text(a, b)
+                end
+            end
+            if #jumps > 0 then hints[#hints + 1] = { group = group, after = timed[i], jumps = jumps } end
+        end
+    end
+    return hints
+end
+
+M.CUT_HINTS_LOGGED = 10
 
 -- Stamped tag names ----------------------------------------------------------
 
 M.PREFIX = "Assisted Grouping"
 
--- `Group` and `Burst` take the zero-padded number; `Camera`, `Tag`, `Parent`
+-- `Group`, `Burst` and `Session` take the zero-padded number; `Camera`, `Tag`, `Parent`
 -- take `label`, which must already be sanitized.
 function M.group_tag(stamp, layer, n, label)
-    local leaf = (layer == "Group" or layer == "Burst") and string.format("%04d", n) or label
+    local leaf = (layer == "Group" or layer == "Burst" or layer == "Session") and string.format("%04d", n) or label
     return table.concat({ M.PREFIX, stamp, layer, leaf }, "|")
 end
 
@@ -427,7 +578,8 @@ local function last_segment(tag)
 end
 
 -- opts as for run_layers, plus trace: the Burst/Camera/Tag/Parent names are written only
--- when it is true. A layer counts as run when its map is in `result`.
+-- when it is true. A layer counts as run when its map is in `result`. A unit in
+-- result.session_of also gets its Session name, trace or not.
 function M.wanted_tags(units, result, stamp, opts)
     local wanted = {}
     local child_of = opts.parent and M.parent_key(opts.parent)
@@ -435,6 +587,9 @@ function M.wanted_tags(units, result, stamp, opts)
     for _, unit in ipairs(units) do
         local set = {}
         set[M.group_tag(stamp, "Group", result.final_of[unit.id])] = true
+        if result.session_of and result.session_of[unit.id] then
+            set[M.group_tag(stamp, "Session", result.session_of[unit.id])] = true
+        end
         if opts.trace and result.timing ~= false and result.final_of ~= result.burst_of then
             set[M.group_tag(stamp, "Burst", result.burst_of[unit.id])] = true
         end
@@ -674,8 +829,29 @@ function M.parse_gap(s)
     return n
 end
 
+-- Minimum burst size from the panel text: a whole number of frames, 2 or more. Nil for
+-- anything else.
+function M.parse_min_size(s)
+    local t = trim(type(s) == "number" and string.format("%.14g", s) or s)
+    if not t:match("^%d+$") then return nil end
+    local n = tonumber(t)
+    if n < 2 then return nil end
+    return n
+end
+
+-- Session gap from the panel text, in minutes: 0 or blank for off, else a number above 0
+-- (`.` or `,` as the decimal mark). Nil for anything else.
+function M.parse_session_gap(s)
+    local t = trim(type(s) == "number" and string.format("%.14g", s) or s):gsub(",", ".")
+    if t == "" then return 0 end
+    if not t:match("^%d*%.?%d*$") or not t:match("%d") then return nil end
+    return tonumber(t)
+end
+
 M.ERR_NO_OUTPUT = "turn on at least one output (group tags or darktable groups)"
 M.ERR_BAD_GAP = "the burst gap must be auto or a number of seconds above 0, e.g. 2 or 0.5"
+M.ERR_BAD_MIN_SIZE = "the minimum burst size must be a whole number of frames, 2 or more"
+M.ERR_BAD_SESSION_GAP = "the session gap must be a number of minutes, e.g. 30, or 0 for off"
 
 -- Stored start_from values (combobox order) and their panel labels.
 M.START_FROM = { "time", "tags", "one" }
@@ -686,19 +862,21 @@ M.PRESET_SCHEMA = {
     { key = "start_from", kind = "choice", choices = M.START_FROM, default = "time" },
     { key = "burst_gap_seconds", kind = "number", default = 2 },
     { key = "burst_gap_auto", kind = "bool", default = false }, -- the gap entry reads "auto"; burst_gap_seconds keeps the last number
+    { key = "min_burst_size", kind = "number", default = 2 }, -- frames; a final group with fewer is left as single frames
     { key = "camera", kind = "bool", default = false },
     { key = "tag", kind = "string", default = "" },
     { key = "parent", kind = "string", default = "" },
     { key = "native_groups", kind = "bool", default = true },
     { key = "write_tags", kind = "bool", default = false },
     { key = "trace_tags", kind = "bool", default = false },
+    { key = "session_gap_minutes", kind = "number", default = 0 }, -- 0 = no Session tags
 }
 
 -- The panel's pages and the preset keys each page's widgets edit (C.page_coverage checks them).
 M.PANEL_PAGES = {
-    { number = 1, title = "start groups", keys = { "start_from", "burst_gap_seconds", "burst_gap_auto" } },
+    { number = 1, title = "start groups", keys = { "start_from", "burst_gap_seconds", "burst_gap_auto", "min_burst_size" } },
     { number = 2, title = "divide groups", keys = { "camera", "tag", "parent" } },
-    { number = 3, title = "output", keys = { "native_groups", "write_tags", "trace_tags" } },
+    { number = 3, title = "output", keys = { "native_groups", "write_tags", "trace_tags", "session_gap_minutes" } },
     { number = 4, title = "run", keys = {} },
     { number = 5, title = "tools", keys = {} },
 }
@@ -706,7 +884,7 @@ M.PANEL_OTHER_KEYS = {}
 
 -- Tag switches by kind, for the tests and the README; the panel places its widgets by hand.
 M.TAG_TOGGLES = {
-    { key = "write_tags", label = "Group tags", kind = "output", writes = { "Group" } },
+    { key = "write_tags", label = "Group tags", kind = "output", writes = { "Group", "Session" } },
     { key = "trace_tags", label = "Layer trace tags", kind = "diag", writes = { "Burst", "Camera", "Tag", "Parent" } },
 }
 M.TAG_KINDS = {
@@ -717,6 +895,7 @@ M.TAG_KINDS = {
 M.ERR_NO_LAYER = "turn on at least one divide layer (camera and lens, tag or parent tag), or start from capture time or last run's groups"
 M.NOTICE_TAGS_OFF = "turn on Group tags, or the next run finds no group tags to start from"
 M.NOTICE_NO_LAYER = "turn on at least one divide layer"
+M.NOTICE_SESSION_TAGS_OFF = "turn on Group tags, or no Session tags are written"
 
 -- Maps the pre-start_from preset keys to a start_from value; refine wins over timing.
 function M.start_from_of(timing, refine)
@@ -755,19 +934,25 @@ local function layers_of(p)
     return p.start_from == "time", p.start_from == "tags"
 end
 
--- p = { start_from, gap_text, camera, tag, parent, write_tags, trace_tags, native_groups } as
--- the panel reads them. Returns group_images options (blank tag/parent → nil, a
--- trailing `|` on the parent dropped), or nil and why the run can't start.
+-- p = { start_from, gap_text, min_size_text, session_gap_text, camera, tag, parent, write_tags,
+-- trace_tags, native_groups } as the panel reads them. Returns group_images options (blank tag/parent
+-- → nil, a trailing `|` on the parent dropped), or nil and why the run can't start.
 function M.panel_options(p)
     if not p.write_tags and not p.native_groups then return nil, M.ERR_NO_OUTPUT end
     local timing, refine = layers_of(p)
     local gap = M.parse_gap(p.gap_text)
     if timing and not gap then return nil, M.ERR_BAD_GAP end
+    local min_frames = M.parse_min_size(p.min_size_text)
+    if not min_frames then return nil, M.ERR_BAD_MIN_SIZE end
+    local session_minutes = M.parse_session_gap(p.session_gap_text)
+    if not session_minutes then return nil, M.ERR_BAD_SESSION_GAP end
     local tag = trim(p.tag)
     local parent = trim(p.parent):gsub("|+$", "")
     local opts = {
         timing = timing,
         gap = gap,
+        min_frames = min_frames,
+        session_gap = session_minutes > 0 and session_minutes * 60 or nil,
         camera = p.camera and true or false,
         tag = tag ~= "" and tag or nil,
         parent = parent ~= "" and parent or nil,
@@ -787,8 +972,12 @@ function M.panel_notice(p)
     if not p.write_tags and not p.native_groups then return M.ERR_NO_OUTPUT end
     local timing, refine = layers_of(p)
     if timing and not M.parse_gap(p.gap_text) then return M.ERR_BAD_GAP end
+    if not M.parse_min_size(p.min_size_text) then return M.ERR_BAD_MIN_SIZE end
+    local session_minutes = M.parse_session_gap(p.session_gap_text)
+    if not session_minutes then return M.ERR_BAD_SESSION_GAP end
     if refine and not p.write_tags then return M.NOTICE_TAGS_OFF end
     if not has_layer(p) then return M.NOTICE_NO_LAYER end
+    if session_minutes > 0 and not p.write_tags then return M.NOTICE_SESSION_TAGS_OFF end
     return ""
 end
 
@@ -892,6 +1081,10 @@ M.tags_of = nil
 -- pairs RAW+JPEG by; `file` is the full path the helper reads; `img` is the
 -- darktable image the tags are written to. `with_tags` false leaves `tags` empty
 -- (one darktable query per image saved) for runs that read and write no tags.
+local function positive_or_nil(v)
+    return type(v) == "number" and v > 0 and v or nil
+end
+
 function M.build_images(images, with_tags)
     local out = {}
     for _, img in ipairs(images) do
@@ -906,6 +1099,9 @@ function M.build_images(images, with_tags)
             maker = blank_to_nil(img.exif_maker),
             model = blank_to_nil(img.exif_model),
             lens = blank_to_nil(img.exif_lens),
+            focal = positive_or_nil(img.exif_focal_length),
+            exposure = positive_or_nil(img.exif_exposure),
+            focus = positive_or_nil(img.exif_focus_distance),
             tags = with_tags == false and {} or M.tags_of(img),
         }
     end
@@ -1536,8 +1732,24 @@ local function count_parent_unsplit(units, parent)
     return n
 end
 
--- opts = { timing, gap, camera, tag, parent, refine, write_tags, trace_tags, native_groups }, as
--- M.panel_options returns them.
+-- The end of every job: puts the selection back, saves `ledger` (nil for nothing to save),
+-- closes the job bar and clears busy. A step that raises is reported and the rest still run.
+local function finish_job(job, selected, ledger)
+    local ok_s, err_s = pcall(C.restore_selection, dt, selected)
+    local ok_l, err_l = true, nil
+    if ledger then ok_l, err_l = pcall(write_ledger, ledger) end
+    local ok_j, err_j = pcall(end_job, job)
+    busy = false
+    if not ok_s then notify_error("Assisted Grouping: couldn't restore the selection: " .. tostring(err_s)) end
+    if not ok_l then
+        notify_error("Assisted Grouping: couldn't save the ledger: " .. tostring(err_l)
+            .. ". Tags and groups this run made will count as yours next run.")
+    end
+    if not ok_j then notify_error("Assisted Grouping: couldn't close the job bar: " .. tostring(err_j)) end
+end
+
+-- opts = { timing, gap, min_frames, session_gap, camera, tag, parent, refine, write_tags, trace_tags,
+-- native_groups }, as M.panel_options returns them.
 function M.group_images(images, opts)
     if busy then
         dt.print("Assisted Grouping: another job is still running. Wait for it to finish, or cancel it first.")
@@ -1556,8 +1768,9 @@ function M.group_images(images, opts)
     busy = true
     M.cancel_requested = false
     start_log("group", #images)
-    log(string.format("run stamp %s; timing %s, gap %s s, camera %s, tag %s, parent %s, refine %s, tags %s, native groups %s",
-        stamp, tostring(opts.timing ~= false), tostring(opts.gap), tostring(opts.camera), tostring(opts.tag), tostring(opts.parent),
+    log(string.format("run stamp %s; timing %s, gap %s s, min frames %s, session gap %s s, camera %s, tag %s, parent %s, refine %s, tags %s, native groups %s",
+        stamp, tostring(opts.timing ~= false), tostring(opts.gap), tostring(opts.min_frames), tostring(opts.session_gap),
+        tostring(opts.camera), tostring(opts.tag), tostring(opts.parent),
         tostring(opts.refine), tostring(opts.write_tags), tostring(opts.native_groups)))
 
     local job, run = nil, { ledger = nil, applying = false }
@@ -1566,7 +1779,8 @@ function M.group_images(images, opts)
         local records = M.build_images(images, M.needs_tags(opts))
         local units = M.collapse(records)
         local layer_opts = { gap = opts.gap, timing = opts.timing, camera = opts.camera, tag = opts.tag,
-            parent = opts.parent, trace = opts.trace_tags }
+            parent = opts.parent, trace = opts.trace_tags, min_frames = opts.min_frames,
+            session_gap = opts.write_tags and opts.session_gap or nil }
         if opts.refine then layer_opts.base_of = M.base_of_from_tags(units) end
 
         -- Only frames the burst layer times need the helper.
@@ -1610,6 +1824,34 @@ function M.group_images(images, opts)
         local wanted = M.wanted_tags(units, result, stamp, layer_opts)
         log(string.format("%d frames in %d groups (%d %s)", #units, count_groups(result.final_of),
             count_groups(result.burst_of), result.timing and "bursts" or "starting groups, timing off"))
+        if result.min_of then
+            log(string.format("minimum burst size %d: %d smaller groups left as single frames",
+                opts.min_frames, result.dissolved))
+        end
+        if result.session_of then
+            log(string.format("sessions: %d (a new one after a gap above %.14g minutes)",
+                count_groups(result.session_of), opts.session_gap / 60))
+        end
+        local links = M.weakest_links(units, result.final_of)
+        if #links > 0 then
+            log(string.format("weakest links: largest time gap inside each of %d groups, widest first (top %d)",
+                #links, math.min(#links, M.WEAKEST_LINKS_LOGGED)))
+            for i = 1, math.min(#links, M.WEAKEST_LINKS_LOGGED) do
+                local link = links[i]
+                log(string.format("  group %04d: %d frames, %.2f s before %s",
+                    link.group, link.frames, link.gap, link.after.members[1].filename))
+            end
+        end
+        local hints = M.cut_hints(units, result.final_of)
+        if #hints > 0 then
+            log(string.format("cut hints: %d places inside a group where a lens or exposure setting jumps (first %d)",
+                #hints, math.min(#hints, M.CUT_HINTS_LOGGED)))
+            for i = 1, math.min(#hints, M.CUT_HINTS_LOGGED) do
+                local hint = hints[i]
+                log(string.format("  group %04d before %s: %s",
+                    hint.group, hint.after.members[1].filename, table.concat(hint.jumps, "; ")))
+            end
+        end
         if opts.parent then
             log(string.format("parent layer: %d frames have no child or several under %s, not split",
                 count_parent_unsplit(units, opts.parent), opts.parent))
@@ -1660,10 +1902,7 @@ function M.group_images(images, opts)
 
     -- Saved once anything may have changed, even if the apply stopped or errored partway,
     -- so what this run made isn't mistaken for the user's next time.
-    C.restore_selection(dt, run.selected)
-    if run.applying then write_ledger(run.ledger) end
-    end_job(job)
-    busy = false
+    finish_job(job, run.selected, run.applying and run.ledger or nil)
     if not okr then notify_error("Assisted Grouping: couldn't run. " .. tostring(err)) end
     log("run finished")
     flush_log()
@@ -1773,10 +2012,7 @@ function M.clear_marks(images)
         end
     end)
 
-    C.restore_selection(dt, selected)
-    if changed then write_ledger(ledger) end
-    end_job(job)
-    busy = false
+    finish_job(job, selected, changed and ledger or nil)
     if not okr then notify_error("Assisted Grouping: clearing marks failed. " .. tostring(err)) end
     flush_log()
     run_next()
@@ -1861,9 +2097,7 @@ function M.reset_to_pairs(images)
         end
     end)
 
-    if changed then write_ledger(ledger) end
-    end_job(job)
-    busy = false
+    finish_job(job, nil, changed and ledger or nil)
     if not okr then notify_error("Assisted Grouping: reset to pairs failed. " .. tostring(err)) end
     flush_log()
     run_next()
@@ -1912,9 +2146,7 @@ function M.browse_bursts(images)
         say(msg)
     end)
 
-    if changed then write_ledger(ledger) end
-    end_job(job)
-    busy = false
+    finish_job(job, nil, changed and ledger or nil)
     if not okr then notify_error("Assisted Grouping: browse as bursts failed. " .. tostring(err)) end
     flush_log()
     run_next()
@@ -1977,6 +2209,11 @@ local function install_panel()
         new_widget("label") { label = "burst gap (seconds)", halign = "start" },
         gap_entry,
     }
+    local min_entry = new_widget("entry") {
+        tooltip = "Minimum burst size in frames (a RAW+JPEG pair is one frame). A final group with fewer frames than this is left as single frames: no darktable group, and each frame gets its own Group tag. Default: 2, so any two frames can group. Raise it to 3 or more to keep stray pairs out of the groups.",
+        placeholder = "minimum burst size (frames), e.g. 2",
+        text = "2",
+    }
     local camera_check = new_widget("check_button") {
         label = "Camera and lens",
         tooltip = "Divide each group by camera maker, model and lens.",
@@ -2004,6 +2241,11 @@ local function install_panel()
         value = false,
         clicked_callback = function() changed(); refresh_notice() end,
     }
+    local session_entry = new_widget("entry") {
+        tooltip = "Sessions above the groups. With a number above 0, each photo with a capture time also gets a Session tag under Assisted Grouping|<run time>|Session|...: a new session starts when the gap to the previous photo is longer than this many minutes. It splits no group. Written only when Group tags is on. Default: 0 (off). Example: 30.",
+        placeholder = "session gap (minutes), 0 = off",
+        text = "0",
+    }
     local trace_check = new_widget("check_button") {
         label = "Layer trace tags",
         tooltip = "Also write the Burst, Camera, Tag and Parent tags that show which layer split each group. Written only when Group tags is on. Off by default; slower on a large selection.",
@@ -2015,6 +2257,8 @@ local function install_panel()
         return {
             start_from = M.START_FROM[start_combo.selected],
             gap_text = gap_entry.text,
+            min_size_text = min_entry.text,
+            session_gap_text = session_entry.text,
             camera = camera_check.value,
             tag = tag_entry.text,
             parent = parent_entry.text,
@@ -2041,16 +2285,22 @@ local function install_panel()
         end
         local auto = gap == "auto"
         if auto then gap = last_gap_number or M.preset_defaults(M.PRESET_SCHEMA).burst_gap_seconds end
+        local min_size = M.parse_min_size(min_entry.text)
+        if not min_size then return nil, M.ERR_BAD_MIN_SIZE end
+        local session_minutes = M.parse_session_gap(session_entry.text)
+        if not session_minutes then return nil, M.ERR_BAD_SESSION_GAP end
         return {
             start_from = start_from,
             burst_gap_seconds = gap,
             burst_gap_auto = auto,
+            min_burst_size = min_size,
             camera = camera_check.value,
             tag = tag_entry.text,
             parent = parent_entry.text,
             native_groups = native_check.value,
             write_tags = tags_check.value,
             trace_tags = trace_check.value,
+            session_gap_minutes = session_minutes,
         }
     end
 
@@ -2062,12 +2312,14 @@ local function install_panel()
             if v == s.start_from and start_combo.selected ~= i then start_combo.selected = i end
         end
         gap_box.visible = (s.start_from == "time")
+        min_entry.text = string.format("%.14g", s.min_burst_size)
         camera_check.value = s.camera
         tag_entry.text = s.tag
         parent_entry.text = s.parent
         native_check.value = s.native_groups
         tags_check.value = s.write_tags
         trace_check.value = s.trace_tags
+        session_entry.text = string.format("%.14g", s.session_gap_minutes)
         refresh_notice()
     end
 
@@ -2154,7 +2406,12 @@ local function install_panel()
     })
 
     local page_widgets = {
-        { start_combo, gap_box },
+        {
+            start_combo,
+            gap_box,
+            new_widget("label") { label = "minimum burst size (frames)", halign = "start" },
+            min_entry,
+        },
         {
             camera_check,
             new_widget("label") { label = "Tag", halign = "start" },
@@ -2166,6 +2423,8 @@ local function install_panel()
             new_widget("section_label") { label = "outputs" },
             native_check,
             tags_check,
+            new_widget("label") { label = "session gap (minutes, 0 = off)", halign = "start" },
+            session_entry,
             new_widget("section_label") { label = "how it decided" },
             trace_check,
         },

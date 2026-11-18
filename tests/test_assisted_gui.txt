@@ -11,7 +11,34 @@ ok   group: the burst and the RAW share a darktable group
 ok   group: the later frame stays alone
 ok   group, tags off: no tag is written
 ok   group: no Lua error
+ok   group: the log heads the weakest links
+ok   group: the log names the burst's largest gap and the frame after it
+ok   group: the log lists the focal-length jump inside the burst as a cut hint
+ok   minimum 3: the two-frame burst is not grouped
+ok   minimum 3: the RAW stays stacked with its JPEG
+ok   minimum 3: the toast counts single frames as groups
+ok   minimum 3: the log counts the groups left apart
+ok   minimum 1: the run refuses
+ok   minimum 1: no job bar
+ok   sessions, Group tags off: no tag is written
+ok   sessions: the burst, its RAW and the later frame get their Session tags
+ok   sessions: each image has its Group and its Session tag
+ok   sessions: the log counts them
+ok   sessions: the settings line carries the minimum burst size and the session gap
+ok   sessions off again: the Session tags are gone, Group stays
 ok   group, helper failed: still groups, on whole seconds
+ok   group, selection not restored: one toast says so
+ok   group, selection not restored: the job bar is closed
+ok   group, selection not restored: the ledger has the run's tags
+ok   clear, selection not restored: it wasn't held up by the last job
+ok   clear, selection not restored: one toast says so
+ok   clear, selection not restored: the job bar is closed
+ok   clear, selection not restored: the ledger forgets the cleared tags
+ok   after a selection that wasn't restored: the next job runs
+ok   after a selection that wasn't restored: no Lua error
+ok   group with tags: tags were attached
+ok   group with tags: nothing is selected while they are attached
+ok   group with tags: the selection is back at the end
 ok   group with tags: every image gets one group tag
 ok   group with tags: the burst shares its tag
 ok   group with tags: the later frame has its own
@@ -40,6 +67,9 @@ ok   bursts: exif_times.py isn't started
 ok   bursts, no group tags: says what to do
 ok   pairs, darktable refuses: one toast with the count and the cause
 ok   pairs, darktable refuses: the job bar is closed
+ok   clear: tags were detached
+ok   clear: nothing is selected while they are detached
+ok   clear: the selection is back at the end
 ok   clear, darktable refuses: one toast with the count and the cause
 ok   clear, darktable refuses: the tags it could detach are gone
 ok   clear: says it started

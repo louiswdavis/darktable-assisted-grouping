@@ -26,5 +26,5 @@ ok   CLI exit code ()
 ok   CLI with cameras: one precision row per camera, sorted, before the overall line
 
 --- stderr ---
-/private/tmp/claude-502/-Users-louis-davis-Documents-codebases/4ee37a40-dd8f-4242-9e40-469aa0cb7e2d/scratchpad/gvenv/lib/python3.14/site-packages/PIL/TiffImagePlugin.py:982: UserWarning: Corrupt EXIF data.  Expecting to read 2 bytes but only got 0. 
+/private/tmp/claude-502/-Users-louis-davis-Documents-codebases/b11c51c0-5d67-4f13-9313-bb2ba27ef177/scratchpad/grouping/venv/lib/python3.14/site-packages/PIL/TiffImagePlugin.py:982: UserWarning: Corrupt EXIF data.  Expecting to read 2 bytes but only got 0. 
   warnings.warn(str(msg))

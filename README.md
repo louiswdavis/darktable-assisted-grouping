@@ -101,12 +101,14 @@ With **Group tags** on, every photo gets the `Group` tag. With **Layer trace tag
 | Tag | When | Example |
 |---|---|---|
 | `Assisted Grouping\|<stamp>\|Group\|NNNN` | always | `Assisted Grouping\|2026-11-08 14:03:21\|Group\|0007` |
-| `Assisted Grouping\|<stamp>\|Burst\|NNNN` (layer trace) | **start from** is *capture time* and a camera, tag or parent layer is on (written even when that layer splits nothing) | `Assisted Grouping\|2026-11-08 14:03:21\|Burst\|0003` |
+| `Assisted Grouping\|<stamp>\|Session\|NNNN` | **session gap** above 0, on photos with a capture time | `Assisted Grouping\|2026-11-08 14:03:21\|Session\|0002` |
+| `Assisted Grouping\|<stamp>\|Burst\|NNNN` (layer trace) | **start from** is *capture time* and a camera, tag or parent layer is on, or **minimum burst size** is above 2 (written even when that layer splits nothing) | `Assisted Grouping\|2026-11-08 14:03:21\|Burst\|0003` |
 | `Assisted Grouping\|<stamp>\|Camera\|<maker model lens>` (layer trace) | Camera and lens on | `Assisted Grouping\|2026-11-08 14:03:21\|Camera\|SONY ZV-E10 E PZ 16-50mm F3.5-5.6 OSS` |
 | `Assisted Grouping\|<stamp>\|Tag\|has <tag>` or `…\|not <tag>` (layer trace) | a tag is typed | `Assisted Grouping\|2026-11-08 14:03:21\|Tag\|has Red` |
 | `Assisted Grouping\|<stamp>\|Parent\|<child>` or `…\|none` (layer trace) | a parent tag is typed | `Assisted Grouping\|2026-11-08 14:03:21\|Parent\|42` |
 
-- `Group` is the final group after every layer; it's the one to read. When timing is the only layer, `Burst` would repeat `Group` exactly, so it is not written. `Burst` is the timing layer's result alone, for a consumer that only wants bursts. With *last run's groups* or *one group* there is no timing layer, so no `Burst` tag is written.
+- `Group` is the final group after every layer; it's the one to read. When timing is the only layer, `Burst` would repeat `Group` exactly, so it is not written. A minimum burst size above 2 counts as a layer: `Burst` then keeps the number of each burst it left as single frames. `Burst` is the timing layer's result alone, for a consumer that only wants bursts. With *last run's groups* or *one group* there is no timing layer, so no `Burst` tag is written.
+- `Session` sits above the groups: photos in capture order, with a new session after every gap longer than the **session gap**. It never splits or joins a group, and a photo with no capture time gets none. The frames of one group can carry different `Session` numbers when the session gap is shorter than the gap inside the group (a session gap below the burst gap, or *one group* / *last run's groups* as the start).
 - Numbers are four digits, zero-padded, counted from `0001` within a run.
 - `Camera` is maker, model and lens joined with spaces; `unknown` when darktable has none of them.
 - `Tag` uses the last segment of the tag you typed (`Cars|Red` gives `has Red`).
@@ -145,7 +147,7 @@ A cancel doesn't wait for the helper. If it is still reading files, it finishes 
 
 ## Presets
 
-The **preset** picker at the top of the panel saves every panel setting (start from, the layers, the burst gap and the outputs) under a name, so a shoot type is one click away.
+The **preset** picker at the top of the panel saves every panel setting (start from, the burst gap, the minimum burst size, the layers, the outputs and the session gap) under a name, so a shoot type is one click away.
 
 - **preset**: `template` first, then your presets by name. Picking one loads its values into the panel. The panel opens on the last one you picked.
 - **template**: the built-in defaults. It can't be updated, renamed or deleted; use it as the starting point for a new preset.
@@ -165,9 +167,10 @@ Layers run in a fixed order, and each one only divides the groups the one before
 ### 1 start groups
 
 - **start from** (dropdown, default *capture time*). Where the groups begin before the divide layers run.
-  - *capture time*: sorts the frames by capture time and starts a new group when the gap to the previous frame is longer than the burst gap. A frame with no capture time is a group of its own, never merged and never dropped. The **burst gap (seconds)** box (text field, default `2`; frames closer together than this are one burst; decimals allowed, with a point or a comma, `0.5`, `1,5`; must be above 0, or the run refuses) shows only for this choice.
+  - *capture time*: sorts the frames by capture time and starts a new group when the gap to the previous frame is longer than the burst gap. A frame with no capture time is a group of its own, never merged and never dropped. The **burst gap (seconds)** box (text field, default `2`; frames closer together than this are one burst; decimals allowed, with a point or a comma, `0.5`, `1,5`; must be above 0, or the run refuses) shows only for this choice. Type `auto` instead of a number to pick the gap from the selection's own timing (experimental): the log's `auto gap … s (…)` line shows the gap it chose, and with under 30 gaps or no clear split it uses 2.
   - *last run's groups*: starts from each photo's group tag from the latest earlier run; photos without one share one group (see [Re-running and clearing](#re-running-and-clearing)).
   - *one group*: every photo starts together, and only the divide layers below split it.
+- **minimum burst size (frames)** (text field, default `2`; a whole number, 2 or more, or the run refuses). A final group (after the divide layers) with fewer frames than this is left as single frames: no darktable group for it, and each of its frames gets a Group tag of its own. A RAW+JPEG pair is one frame and still stacks as a pair. `2` keeps every group of two or more frames; `3` or more keeps stray pairs out of the groups. The log line `minimum burst size N: … smaller groups left as single frames` counts them. Applies to every **start from** choice.
 
 ### 2 divide groups
 
@@ -185,17 +188,18 @@ Two headings, **outputs** and **how it decided**.
 
 - **Apply darktable groups** (on by default). One darktable group per final group of two or more photos. Photos already in a darktable group you made by hand are skipped, left in that group, and counted in the log. With only this output on, the layers are flattened into the final grouping, because a photo can only be in one darktable group.
 - **Group tags** (off by default; slower on large selections). The tags in [What you get](#what-you-get). Needed for *last run's groups*, **browse as bursts** and anything that reads the tags.
+- **session gap (minutes, 0 = off)** (0 by default). Above 0, every photo with a capture time also gets a `Session` tag: photos are walked in capture order and a gap longer than this many minutes starts the next session, e.g. `30` separates the morning from the afternoon. Decimals work (`0.5`, `2,5`). Sessions are tags only, so Group tags must be on; they don't change the groups or the darktable groups. The log says "sessions: N (a new one after a gap above M minutes)".
 - **Layer trace tags** (under **how it decided**; off by default, slower on large selections). The `Burst`, `Camera`, `Tag` and `Parent` tags showing which layer split each group. Written only when Group tags is on, since they ride on the same tag write. A preset saved with the old **Group tags** on (`write_tags: true`) and no `trace_tags` loads with both switches on, and the log says so; one saved with it off loads with Layer trace tags off.
 
 At least one output must be on, or the run refuses: "turn on at least one output (group tags or darktable groups)". Each output is only changed when it's on: a run with darktable groups off leaves the plugin's earlier darktable groups as they are, and a run with tags off leaves its earlier tags.
 
-A notice line below the pages says what would stop or undermine the next run, in this priority: "turn on at least one output (group tags or darktable groups)", then "the burst gap must be a number of seconds above 0, e.g. 2 or 0.5", then "turn on Group tags, or the next run finds no group tags to start from" (*last run's groups* without Group tags), then "turn on at least one divide layer" (*one group* with no layer). It is hidden when nothing is wrong. It updates from the **start from** dropdown, the four checkboxes (Camera and lens, Apply darktable groups, Group tags, Layer trace tags), a preset load, the reset and the **Group selection** click. Text typed into burst gap, Tag or Parent tag is only checked after one of those.
+A notice line below the pages says what would stop or undermine the next run, in this priority: "turn on at least one output (group tags or darktable groups)", then "the burst gap must be auto or a number of seconds above 0, e.g. 2 or 0.5", then "the minimum burst size must be a whole number of frames, 2 or more", then "the session gap must be a number of minutes, e.g. 30, or 0 for off", then "turn on Group tags, or the next run finds no group tags to start from" (*last run's groups* without Group tags), then "turn on at least one divide layer" (*one group* with no layer), then "turn on Group tags, or no Session tags are written" (a session gap above 0 without Group tags; the run still goes ahead, without Session tags). It is hidden when nothing is wrong. It updates from the **start from** dropdown, the four checkboxes (Camera and lens, Apply darktable groups, Group tags, Layer trace tags), a preset load, the reset and the **Group selection** click. Text typed into burst gap, minimum burst size, session gap, Tag or Parent tag is only checked after one of those.
 
 ### 4 run
 
 Two headings, **group** and **browse as**.
 
-- **Group selection.** Runs the layers on the selected photos. The partial-burst warning sits under it.
+- **Group selection.** Runs the layers on the selected photos. The partial-burst warning sits under it. After the `… frames in … groups` line the log lists each group's weakest link, widest first (the ten widest): `group 0003: 12 frames, 1.80 s before DSC00042.JPG` means group 3's largest time gap between neighbouring frames is 1.80 s, just before that file. The frame count is the whole group, including frames with no capture time. A gap close to the burst gap marks a group that may hold two bursts; lower the gap or split it by hand. After that come the cut hints (the first ten, by group): `group 0003 before DSC00042.JPG: focal length 70 to 200 mm` means the lens or exposure setting jumped between that file and the frame before it inside one group. A jump is focal length changing by 1.5× or more, exposure time by 4× (two stops) or more, or focus distance by 2× or more; a setting darktable has no value for is skipped. Hints are log lines only and change no group.
 - **browse as** (darktable groups only; tags are kept), with two buttons. **bursts** puts the selected photos back into their burst groups from the latest run's group tags; with no group tags it says "nothing to browse. The selection has no group tags; run Group selection with Group tags on first.". **pairs** ungroups the selected photos and their groups, then stacks each RAW with its JPEG again; tags stay. See [Re-running and clearing](#re-running-and-clearing).
 
 ### 5 tools

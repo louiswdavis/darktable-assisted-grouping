@@ -272,6 +272,72 @@ local based = A.run_layers({ cu(1, { epoch = 0 }), cu(2, { epoch = 100 }), cu(3,
 check("base_of keeps its groups", based.burst_of[1] .. based.burst_of[2], "12")
 check("unit outside base_of is numbered after the base groups", based.burst_of[3], 3)
 
+-- minimum burst size: bursts of 3 (0,1,2 s), 2 (10,11 s) and 1 (20 s) frames
+local sized = {
+    cu(1, { epoch = 0 }), cu(2, { epoch = 1 }), cu(3, { epoch = 2 }),
+    cu(4, { epoch = 10 }), cu(5, { epoch = 11 }), cu(6, { epoch = 20 }),
+}
+local function groups_str(group_of)
+    local out = {}
+    for id = 1, 6 do out[id] = group_of[id] end
+    return table.concat(out, ",")
+end
+local min2 = A.run_layers(sized, { gap = 2, min_frames = 2 })
+check("min_frames 2: final_of is still burst_of", min2.final_of, min2.burst_of)
+check("min_frames 2: groups as without it", groups_str(min2.final_of), "1,1,1,2,2,3")
+check("min_frames unset: groups as with 2", groups_str(A.run_layers(sized, { gap = 2 }).final_of), "1,1,1,2,2,3")
+local min3 = A.run_layers(sized, { gap = 2, min_frames = 3 })
+check("min_frames 3: the pair is left as single frames, numbered densely", groups_str(min3.final_of), "1,1,1,2,3,4")
+check("min_frames 3: final_of is min_of, burst_of keeps the pair",
+    tostring(min3.final_of == min3.min_of) .. " " .. groups_str(min3.burst_of), "true 1,1,1,2,2,3")
+check("min_frames 3: one group of 2+ was dissolved", min3.dissolved, 1)
+check("min_frames 4: nothing is big enough", groups_str(A.run_layers(sized, { gap = 2, min_frames = 4 }).final_of), "1,2,3,4,5,6")
+local min_cam = A.run_layers({ cu(1, { epoch = 0, model = "a" }), cu(2, { epoch = 0.5, model = "a" }), cu(3, { epoch = 1, model = "b" }),
+    cu(4, { epoch = 1.5, model = "a" }), cu(5, { epoch = 2, model = "b" }), cu(6, { epoch = 2.5, model = "a" }) },
+    { gap = 2, camera = true, min_frames = 3 })
+check("min_frames counts the final group, after the divide layers", groups_str(min_cam.final_of), "1,1,2,1,3,1")
+-- weakest_links: group 1 at 0, 0.5, 2 s; group 2 at 10, 13 s plus an untimed frame; group 3
+-- one timed and one untimed frame
+local link_units = {
+    cu(1, { epoch = 2 }), cu(2, { epoch = 0 }), cu(3, { epoch = 0.5 }),
+    cu(4, { epoch = 10 }), cu(5, { epoch = 13 }), cu(6, { epoch = 50 }), cu(7, {}), cu(8, {}),
+}
+local link_strs = {}
+for _, link in ipairs(A.weakest_links(link_units, { [1] = 1, [2] = 1, [3] = 1, [4] = 2, [5] = 2, [6] = 3, [7] = 3, [8] = 2 })) do
+    link_strs[#link_strs + 1] = string.format("g%d n%d %.1f before %d", link.group, link.frames, link.gap, link.after.id)
+end
+check("weakest_links: widest gap first, by capture time; frames counts untimed ones; groups under two timed frames left out",
+    table.concat(link_strs, "; "), "g2 n3 3.0 before 5; g1 n3 1.5 before 1")
+check("weakest_links: no groups of two, no links", #A.weakest_links(link_units, { [1] = 1, [2] = 2, [3] = 3, [4] = 4, [5] = 5, [6] = 6, [7] = 7, [8] = 8 }), 0)
+-- cut_hints: group 1 zooms 70 to 200 mm then holds; group 2 slows two stops and refocuses
+do
+    local hint_units = {
+        cu(1, { epoch = 0, focal = 70, exposure = 0.001 }), cu(2, { epoch = 1, focal = 200, exposure = 0.001 }),
+        cu(3, { epoch = 2, focal = 210, exposure = 0.002 }), cu(4, { epoch = 11, exposure = 0.25, focus = 20 }),
+        cu(5, { epoch = 10, exposure = 1 / 1000, focus = 5 }), cu(6, { focal = 400 }), cu(7, { epoch = 12, focal = 14 }),
+    }
+    local hint_strs = {}
+    for _, hint in ipairs(A.cut_hints(hint_units, { [1] = 1, [2] = 1, [3] = 1, [4] = 2, [5] = 2, [6] = 1, [7] = 2 })) do
+        hint_strs[#hint_strs + 1] = string.format("g%d before %d: %s", hint.group, hint.after.id, table.concat(hint.jumps, "; "))
+    end
+    check("cut_hints: jumps by group then capture time; small moves, untimed frames and missing settings skipped",
+        table.concat(hint_strs, " | "),
+        "g1 before 2: focal length 70 to 200 mm | g2 before 4: exposure 1/1000 to 1/4 s; focus distance 5 to 20 m")
+    check("cut_hints: a jump across two groups is no hint",
+        #A.cut_hints(hint_units, { [1] = 1, [2] = 2, [3] = 2, [4] = 3, [5] = 4, [6] = 5, [7] = 6 }), 0)
+    local zoomed = A.collapse(A.build_images({
+        { id = 1, path = "/p", filename = "A_1.ARW", exif_datetime_taken = "2026:05:01 10:00:00", exif_focal_length = 0,
+            exif_exposure = 0, exif_focus_distance = 0 },
+        { id = 2, path = "/p", filename = "A_1.JPG", exif_datetime_taken = "2026:05:01 10:00:00", exif_focal_length = 85,
+            exif_exposure = 0.004, exif_focus_distance = 3.5 },
+    }, false))
+    check("build_images: zero EXIF settings are unknown, and the pair's other file fills them",
+        string.format("%d %s %s %s", #zoomed, zoomed[1].focal, zoomed[1].exposure, zoomed[1].focus), "1 85 0.004 3.5")
+end
+
+local dissolved_of, dissolved_n = A.dissolve_small({ [1] = 2, [2] = 5, [3] = 2, [4] = 5, [5] = 5, [6] = 9 }, sized, 3)
+check("dissolve_small: old group order, then unit order", groups_str(dissolved_of) .. " / " .. dissolved_n, "1,3,2,3,3,4 / 1")
+
 -- group_tag ------------------------------------------------------------------
 local STAMP = "2026-11-08 22:45:10"
 check("group_tag pads the final group number",
@@ -304,6 +370,43 @@ check("wanted_tags: trace off writes Group only", keys(untraced[10]),
 local plain = A.wanted_tags(pair, A.run_layers(pair, { gap = 2 }), STAMP, { gap = 2 })
 check("wanted_tags: timing alone writes Group only (Burst would be identical)", keys(plain[12]),
     "Assisted Grouping|2026-11-08 22:45:10|Group|0002")
+
+-- Minimum burst size above 2 is a layer of its own: Burst keeps the bursts it dissolved.
+do
+    local min_trace_opts = { gap = 2, min_frames = 3, trace = true }
+    local min_trace = A.wanted_tags(pair, A.run_layers(pair, min_trace_opts), STAMP, min_trace_opts)
+    check("wanted_tags: minimum burst size 3 with trace on writes Burst beside Group", keys(min_trace[12]),
+        "Assisted Grouping|2026-11-08 22:45:10|Burst|0002 + Assisted Grouping|2026-11-08 22:45:10|Group|0002")
+    local min2_trace_opts = { gap = 2, min_frames = 2, trace = true }
+    local min2_trace = A.wanted_tags(pair, A.run_layers(pair, min2_trace_opts), STAMP, min2_trace_opts)
+    check("wanted_tags: minimum burst size 2 is no layer, so no Burst", keys(min2_trace[12]),
+        "Assisted Grouping|2026-11-08 22:45:10|Group|0002")
+    local min_alone_opts = { alone = true, tag = "Cars|Red", min_frames = 3, trace = true }
+    local min_alone = A.wanted_tags(pair, A.run_layers(pair, min_alone_opts), STAMP, min_alone_opts)
+    check("wanted_tags: minimum burst size 3 without timing writes no Burst",
+        min_alone[12]["Assisted Grouping|2026-11-08 22:45:10|Burst|0002"], nil)
+end
+
+-- sessions: frames at 0 s, 10 min, 50 min and 55 min, one with no capture time; gap 30 min
+local session_units = {
+    cu(1, { epoch = 3000 }), cu(2, { epoch = 0 }), cu(3, { epoch = 600 }), cu(4, { epoch = 3300 }), cu(5, {}),
+}
+local session_of = A.sessions_of(session_units, 1800)
+check("sessions_of: a gap above the session gap starts a new session; untimed frames have none",
+    string.format("%s %s %s %s %s", session_of[1], session_of[2], session_of[3], session_of[4], session_of[5]), "2 1 1 2 nil")
+check("sessions_of: a gap equal to the session gap does not split", A.sessions_of({ cu(1, { epoch = 0 }), cu(2, { epoch = 1800 }) }, 1800)[2], 1)
+check("run_layers: no session_gap, no session_of", A.run_layers(session_units, { gap = 2 }).session_of, nil)
+local session_opts = { gap = 2, session_gap = 1800 }
+local session_result = A.run_layers(session_units, session_opts)
+check("run_layers: session_gap leaves the groups alone", session_result.final_of, session_result.burst_of)
+local session_wanted = A.wanted_tags(session_units, session_result, STAMP, session_opts)
+check("wanted_tags: a timed frame gets Group and Session, trace off", keys(session_wanted[4]),
+    "Assisted Grouping|2026-11-08 22:45:10|Group|" .. string.format("%04d", session_result.final_of[4])
+    .. " + Assisted Grouping|2026-11-08 22:45:10|Session|0002")
+check("wanted_tags: an untimed frame gets no Session", keys(session_wanted[5]),
+    "Assisted Grouping|2026-11-08 22:45:10|Group|" .. string.format("%04d", session_result.final_of[5]))
+check("latest_group_tag ignores Session tags",
+    A.latest_group_tag({ ["Assisted Grouping|2026-11-08 22:45:10|Session|0002"] = true }), nil)
 
 -- latest_group_tag -----------------------------------------------------------
 local older = "Assisted Grouping|2026-01-01 10:00:00|Group|0003"
@@ -484,7 +587,7 @@ check("parse_gap: two dots are rejected", A.parse_gap("1.2.3"), nil)
 
 -- panel_options ------------------------------------------------------------------
 local function panel(over)
-    local p = { start_from = "time", gap_text = "2", camera = false, tag = "", parent = "",
+    local p = { start_from = "time", gap_text = "2", min_size_text = "2", camera = false, tag = "", parent = "",
         write_tags = true, native_groups = false }
     for k, v in pairs(over or {}) do p[k] = v end
     return p
@@ -505,6 +608,30 @@ check("panel_options: gap parsed, tag trimmed, trailing | dropped from parent",
     o.gap .. " / " .. o.tag .. " / " .. o.parent, "0.5 / Cars|Red / Cars|Number")
 o = A.panel_options(panel({ tag = "   ", parent = "|" }))
 check("panel_options: blank tag and parent become nil", o.tag == nil and o.parent == nil, true)
+check("panel_options: minimum burst size 2 by default text", o.min_frames, 2)
+check("panel_options: minimum burst size parsed", A.panel_options(panel({ min_size_text = " 4 " })).min_frames, 4)
+o, why = A.panel_options(panel({ min_size_text = "1" }))
+check("panel_options: minimum burst size under 2 refuses", tostring(o) .. " / " .. tostring(why), "nil / " .. A.ERR_BAD_MIN_SIZE)
+o, why = A.panel_options(panel({ min_size_text = "abc", start_from = "one", camera = true }))
+check("panel_options: bad minimum refuses with timing off too", why, A.ERR_BAD_MIN_SIZE)
+
+local parsed_sizes = {}
+for _, text in ipairs({ "2", " 10 ", "1", "0", "2.5", "-3", "", "three", "3 4" }) do
+    parsed_sizes[#parsed_sizes + 1] = tostring(A.parse_min_size(text))
+end
+check("parse_min_size: whole numbers of 2 or more only", table.concat(parsed_sizes, " "), "2 10 nil nil nil nil nil nil nil")
+check("parse_min_size: a number from a preset", A.parse_min_size(3), 3)
+
+check("panel_options: session gap off by default", A.panel_options(panel()).session_gap, nil)
+check("panel_options: session gap 0 is off", A.panel_options(panel({ session_gap_text = "0" })).session_gap, nil)
+check("panel_options: session gap minutes become seconds", A.panel_options(panel({ session_gap_text = " 1,5 " })).session_gap, 90)
+o, why = A.panel_options(panel({ session_gap_text = "soon" }))
+check("panel_options: bad session gap refuses", tostring(o) .. " / " .. tostring(why), "nil / " .. A.ERR_BAD_SESSION_GAP)
+local parsed_sessions = {}
+for _, text in ipairs({ "", "0", "30", "0.5", "2,5", "-1", "1e3", "half", "." }) do
+    parsed_sessions[#parsed_sessions + 1] = tostring(A.parse_session_gap(text))
+end
+check("parse_session_gap: blank and 0 are off, numbers above 0 pass", table.concat(parsed_sessions, " "), "0 0 30 0.5 2.5 nil nil nil nil")
 
 check("start_from_of: refine wins", A.start_from_of(true, true), "tags")
 check("start_from_of: timing off", A.start_from_of(false, false), "one")
@@ -546,6 +673,12 @@ check("NOTICE_TAGS_OFF names Group tags", A.NOTICE_TAGS_OFF,
 check("panel_notice: fine is empty", A.panel_notice(panel()), "")
 check("panel_notice: both outputs off", A.panel_notice(panel({ write_tags = false, native_groups = false })), A.ERR_NO_OUTPUT)
 check("panel_notice: bad gap with capture time", A.panel_notice(panel({ gap_text = "abc" })), A.ERR_BAD_GAP)
+check("panel_notice: bad minimum burst size", A.panel_notice(panel({ min_size_text = "1" })), A.ERR_BAD_MIN_SIZE)
+check("panel_notice: bad session gap", A.panel_notice(panel({ session_gap_text = "soon" })), A.ERR_BAD_SESSION_GAP)
+check("panel_notice: session gap with Group tags on is fine", A.panel_notice(panel({ session_gap_text = "30" })), "")
+check("panel_notice: session gap without Group tags",
+    A.panel_notice(panel({ session_gap_text = "30", write_tags = false, native_groups = true })), A.NOTICE_SESSION_TAGS_OFF)
+check("panel_notice: bad gap comes before a bad minimum", A.panel_notice(panel({ gap_text = "abc", min_size_text = "1" })), A.ERR_BAD_GAP)
 check("panel_notice: bad gap ignored with one group", A.panel_notice(panel({ gap_text = "abc", start_from = "one", camera = true })), "")
 check("panel_notice: tags source without write tags", A.panel_notice(panel({ start_from = "tags", write_tags = false, native_groups = true })), A.NOTICE_TAGS_OFF)
 check("panel_notice: tags source counts as a layer", A.panel_notice(panel({ start_from = "tags", write_tags = true })), "")
@@ -792,8 +925,25 @@ check("write_file_atomic: unwritable folder fails", A.write_file_atomic("/nonexi
 require("test_preset_block")(A, check)
 
 local pd = A.preset_defaults(A.PRESET_SCHEMA)
-check("preset schema: defaults", string.format("%s %s %s [%s] [%s] %s %s", pd.start_from, pd.burst_gap_seconds, pd.camera,
-    pd.tag, pd.parent, pd.native_groups, pd.write_tags), "time 2 false [] [] true false")
+check("preset schema: defaults", string.format("%s %s %s %s [%s] [%s] %s %s %s", pd.start_from, pd.burst_gap_seconds,
+    pd.min_burst_size, pd.camera, pd.tag, pd.parent, pd.native_groups, pd.write_tags, pd.session_gap_minutes),
+    "time 2 2 false [] [] true false 0")
+do
+    local round_trip = A.preset_merge(A.PRESET_SCHEMA, A.preset_decode(PC.preset_encode(A.PRESET_SCHEMA,
+        { min_burst_size = 4, session_gap_minutes = 2.5 })))
+    check("preset schema: min_burst_size and session_gap_minutes survive a save and load",
+        string.format("%s %s", round_trip.min_burst_size, round_trip.session_gap_minutes), "4 2.5")
+end
+check("preset schema: a preset without min_burst_size loads as 2",
+    A.preset_merge(A.PRESET_SCHEMA, A.preset_decode('{"burst_gap_seconds": 0.5}')).min_burst_size, 2)
+local readme_file = assert(io.open(script_dir .. "/../README.md", "rb"))
+local README = readme_file:read("a")
+readme_file:close()
+local quoted = {}
+for _, message in ipairs({ A.ERR_BAD_GAP, A.ERR_BAD_MIN_SIZE, A.ERR_BAD_SESSION_GAP, A.NOTICE_SESSION_TAGS_OFF }) do
+    quoted[#quoted + 1] = tostring(README:find(message, 1, true) ~= nil)
+end
+check("README quotes the bad-gap, bad-minimum and session messages", table.concat(quoted, " "), "true true true true")
 local _, start_problems = A.preset_merge(A.PRESET_SCHEMA, A.preset_decode('{"start_from": "yesterday"}'))
 check("preset schema: start_from accepts only its choices", table.concat(start_problems, " "):find("start_from", 1, true) ~= nil, true)
 check("preset schema: decimal gap kept", A.preset_merge(A.PRESET_SCHEMA, A.preset_decode('{"burst_gap_seconds": 0.5}')).burst_gap_seconds, 0.5)
