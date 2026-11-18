@@ -415,8 +415,20 @@ check("group, large burst: one darktable group", images_by_id[140].group, 101)
 check("group, large burst: the job bar reaches the end", jobs[1] and jobs[1].percent, 1.0)
 group_writes, group_reads = 0, 0
 click("Group selection", burst)
-check("regroup, large burst: 40 detached once each, 39 attached", group_writes, 79)
+check("regroup, large burst: a group that already matches is not rewritten", group_writes, 0)
 check("regroup, large burst: the group is read from darktable once", group_reads, 1)
+check("regroup, large burst: the log counts the images left alone",
+    read_file(ROOT .. "/config/assisted_grouping.log"):find(
+        "native groups: 0 images grouped, 40 left as they were (already grouped this way), 0 skipped (already in a hand-made group)",
+        1, true) ~= nil, true)
+burst[#burst + 1] = image(141, "DSC00141.JPG", "2026:05:02 10:00:00")
+group_writes = 0
+click("Group selection", burst)
+check("regroup, one frame more: 41 detached once each, 40 attached", group_writes, 81)
+check("regroup, one frame more: one darktable group", images_by_id[141].group, 101)
+table.remove(burst)
+images_by_id[141]:group_with()
+click("Group selection", burst)
 group_writes = 0
 click("Clear grouping marks", burst)
 check("clear, large burst: every image is rewritten once", group_writes, 40)

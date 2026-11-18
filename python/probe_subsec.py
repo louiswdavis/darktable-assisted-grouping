@@ -5,6 +5,7 @@
 # Fields the file lacks print blank. Reads with Pillow, then exifread for RAW files Pillow cannot open.
 
 import sys
+import time
 
 from PIL import Image
 
@@ -24,50 +25,60 @@ def _text(value):
     return value or None
 
 
+def log(msg: str):
+    """One timestamped line on stderr, which the plugin copies into its run log."""
+    print(time.strftime("%H:%M:%S ") + "py: " + msg, file=sys.stderr, flush=True)
+
+
 def _read_pillow(path: str):
-    """Return raw (DateTimeOriginal, SubSecTimeOriginal) via Pillow, or (None, None)."""
+    """Return raw (DateTimeOriginal, SubSecTimeOriginal, why not) via Pillow; the fields are None
+    when Pillow can't open the file, and `why not` then says why."""
     try:
         with Image.open(path) as img:
             ifd = img.getexif().get_ifd(EXIF_IFD)
-    except Exception:
-        return None, None
-    return ifd.get(DATE_TIME_ORIGINAL), ifd.get(SUBSEC_TIME_ORIGINAL)
+    except Exception as e:
+        return None, None, f"Pillow: {type(e).__name__}: {e}"
+    return ifd.get(DATE_TIME_ORIGINAL), ifd.get(SUBSEC_TIME_ORIGINAL), None
 
 
 def _read_exifread(path: str):
-    """Return raw (DateTimeOriginal, SubSecTimeOriginal) via exifread, or (None, None).
+    """Return raw (DateTimeOriginal, SubSecTimeOriginal, why not) via exifread; the fields are None
+    when exifread is missing or can't read the file, and `why not` then says why.
 
     Covers RAW files Pillow cannot open, such as Sony ARW. Missing exifread is not an error.
     """
     try:
         import exifread
     except ImportError:
-        return None, None
+        return None, None, "exifread: not installed"
     try:
         with open(path, "rb") as f:
             tags = exifread.process_file(f, details=False)
-    except Exception:
-        return None, None
+    except Exception as e:
+        return None, None, f"exifread: {type(e).__name__}: {e}"
     dto = tags.get("EXIF DateTimeOriginal")
     sub = tags.get("EXIF SubSecTimeOriginal")
     return (str(dto.values) if dto is not None else None,
-            str(sub.values) if sub is not None else None)
+            str(sub.values) if sub is not None else None, None)
 
 
 def read_subsec_fields(path: str) -> dict:
     """Return DateTimeOriginal, SubSecTimeOriginal and their combination, each str or None.
 
     Tries Pillow first, then exifread for whichever field Pillow left missing (RAW files); a
-    value Pillow found is kept. A file neither can read returns all None instead of raising.
+    value Pillow found is kept. A file neither can read returns all None instead of raising, and
+    the log gets one line naming the file and why each reader failed.
     """
     result = dict.fromkeys(FIELDS)
-    dto_raw, sub_raw = _read_pillow(path)
+    dto_raw, sub_raw, pillow_error = _read_pillow(path)
     dto = _text(dto_raw)
     sub = _text(sub_raw)
     if dto is None or sub is None:
-        ex_dto, ex_sub = _read_exifread(path)
+        ex_dto, ex_sub, exifread_error = _read_exifread(path)
         dto = dto or _text(ex_dto)
         sub = sub or _text(ex_sub)
+        if dto is None and (pillow_error or exifread_error):
+            log(f"{path}: couldn't read the capture time ({'; '.join(e for e in (pillow_error, exifread_error) if e)})")
     result["DateTimeOriginal"] = dto
     result["SubSecTimeOriginal"] = sub
     if dto and sub:

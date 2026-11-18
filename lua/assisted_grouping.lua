@@ -754,8 +754,10 @@ end
 -- image and is not in the ledger as `native`: that group was made by hand. Every
 -- image of a kept frame in a final group of 2+ images is detached, then the group's
 -- lowest id leads. Selected ledger images of smaller groups are detached too, so
--- the plugin's old groups dissolve on a re-run.
--- Returns { detach = sorted ids, groups = { { leader, members = sorted ids } }, skipped = n images }.
+-- the plugin's old groups dissolve on a re-run. A final group that is already one
+-- native group with exactly those images, led by the lowest id (`members_of[id].leader`),
+-- is left as it is.
+-- Returns { detach = sorted ids, groups = { { leader, members = sorted ids } }, skipped = n images, unchanged = n images }.
 function M.plan_native(units, final_of, ledger, members_of)
     local by_group, order = {}, {}
     for _, unit in ipairs(units) do
@@ -779,7 +781,17 @@ function M.plan_native(units, final_of, ledger, members_of)
         return false
     end
 
-    local plan, detach, skipped_unit = { detach = {}, groups = {}, skipped = 0 }, {}, {}
+    local function in_place(kept)
+        local now = members_of[kept[1]] or {}
+        if now.leader ~= kept[1] or #now ~= #kept then return false end
+        local ids = {}
+        for _, m in ipairs(now) do ids[#ids + 1] = m.id end
+        table.sort(ids)
+        return table.concat(ids, ",") == table.concat(kept, ",")
+    end
+
+    local plan, detach, skipped_unit = { detach = {}, groups = {}, skipped = 0, unchanged = 0 }, {}, {}
+    local settled = {}
     for _, g in ipairs(order) do
         local n = 0
         for _, unit in ipairs(by_group[g]) do n = n + #unit.members end
@@ -795,15 +807,20 @@ function M.plan_native(units, final_of, ledger, members_of)
             end
             if #kept >= 2 then
                 table.sort(kept)
-                plan.groups[#plan.groups + 1] = { leader = kept[1], members = kept }
-                for _, id in ipairs(kept) do detach[id] = true end
+                if in_place(kept) then
+                    plan.unchanged = plan.unchanged + #kept
+                    for _, id in ipairs(kept) do settled[id] = true end
+                else
+                    plan.groups[#plan.groups + 1] = { leader = kept[1], members = kept }
+                    for _, id in ipairs(kept) do detach[id] = true end
+                end
             end
         end
     end
     for _, unit in ipairs(units) do
         if not skipped_unit[unit] then
             for _, m in ipairs(unit.members) do
-                if ledger[m.id] and ledger[m.id].native then detach[m.id] = true end
+                if ledger[m.id] and ledger[m.id].native and not settled[m.id] then detach[m.id] = true end
             end
         end
     end
@@ -1301,7 +1318,8 @@ local TMP_DIR = dt.configuration.tmp_dir
 -- Leftovers of a darktable that crashed or was killed mid-run; a day old is surely not live.
 C.sweep_temp(TMP_DIR, "dt_assisted_grouping_", 86400)
 local LOG_PATH = dt.configuration.config_dir .. "/assisted_grouping.log"
-local PREV_LOG_PATH = dt.configuration.config_dir .. "/assisted_grouping.prev.log"
+-- The 5 runs before the current one are kept as .prev.log, .prev2.log to .prev5.log.
+local LOGS_KEPT = 5
 -- Lua errors (panel build, callbacks, events) go to their own log, which runs never rotate.
 local LUA_LOG_PATH = dt.configuration.config_dir .. "/assisted_grouping.lua.log"
 local guard = C.error_guard(dt, LUA_LOG_PATH, "Assisted Grouping")
@@ -1331,21 +1349,9 @@ local function make_dir(dir)
     end
 end
 
--- Log lines wait here and reach the file at flush_log.
-local log_buffer = {}
-
-local function log(msg)
-    log_buffer[#log_buffer + 1] = os.date("%H:%M:%S ") .. "lua: " .. msg
-end
-
-local function flush_log()
-    if #log_buffer == 0 then return end
-    local f = io.open(LOG_PATH, "a")
-    if not f then return end
-    f:write(table.concat(log_buffer, "\n"), "\n")
-    f:close()
-    log_buffer = {}
-end
+-- Every line reaches disk at once: the helper writes its stderr to its own file, never to this log.
+local run_log = C.run_log(LOG_PATH)
+local log, flush_log = run_log.log, run_log.flush
 
 local function say(msg)
     dt.print(msg)
@@ -1362,8 +1368,7 @@ end
 -- `what` names the job in the header: "group" or "clear".
 local function start_log(what, n)
     flush_log()
-    pcall(os.remove, PREV_LOG_PATH)
-    pcall(os.rename, LOG_PATH, PREV_LOG_PATH)
+    run_log.rotate(LOGS_KEPT)
     log(string.format("%s started: darktable %s, %d images", what, tostring(dt.configuration.version), n))
 end
 
@@ -1442,8 +1447,7 @@ end
 -- Copies the helper's stderr into the log. The helper writes it to its own temp
 -- file, so a straggler never holds the log open (Windows then can't rotate it).
 local function log_helper_stderr(p)
-    local text = read_file(p.stderr)
-    for line in (text or ""):gmatch("[^\r\n]+") do log_buffer[#log_buffer + 1] = line end
+    run_log.append_lines(read_file(p.stderr))
 end
 
 local function cancelled(job)
@@ -1592,7 +1596,7 @@ end
 local function apply_tags(run, records, wanted, job, progress)
     local ledger = run.ledger
     local tag_objs = {}
-    local w = C.paced_writer(dt, WRITE_BUDGET, WRITE_SLEEP_MS)
+    local w = C.paced_writer(dt, WRITE_BUDGET, WRITE_SLEEP_MS, log)
     local n_added, n_removed = 0, 0
     local function tag_named(name)
         tag_objs[name] = tag_objs[name] or tags.create(name)
@@ -1614,7 +1618,7 @@ local function apply_tags(run, records, wanted, job, progress)
                 mine[name] = true
                 n_added = n_added + 1
             end
-        end, #plan.add + #plan.remove)
+        end, #plan.add + #plan.remove, string.format("image %d (%s): write group tags", r.id, r.filename))
         M.set_ledger_tags(ledger, r.id, mine)
         progress(i / #plans)
         if not job.valid then
@@ -1642,6 +1646,7 @@ local function group_members(img, cache)
         for _, other in ipairs(img:get_group_members()) do
             list[#list + 1] = { id = tonumber(other.id), dir = other.path, filename = other.filename, img = other }
         end
+        list.leader = key
         cache[key] = list
     end
     return cache[key]
@@ -1678,13 +1683,13 @@ function M.apply_native_groups(units, final_of, ledger, progress)
     end
 
     local plan = M.plan_native(units, final_of, ledger, members_of)
-    local w = C.paced_writer(dt, WRITE_BUDGET, WRITE_SLEEP_MS)
+    local w = C.paced_writer(dt, WRITE_BUDGET, WRITE_SLEEP_MS, log)
     local write, grouped = w.write, 0
 
     local detached = {}
     for i, id in ipairs(leaders_last(plan.detach, img_of)) do
         -- No leader argument: darktable moves the image into a group of its own.
-        if write(function() img_of[id]:group_with() end) then
+        if write(function() img_of[id]:group_with() end, 1, string.format("image %d (%s): take out of its darktable group", id, img_of[id].filename)) then
             detached[id] = true
             M.set_ledger_native(ledger, id, nil)
         end
@@ -1696,7 +1701,7 @@ function M.apply_native_groups(units, final_of, ledger, progress)
             local attached = 0
             for _, id in ipairs(group.members) do
                 if id ~= leader and detached[id]
-                    and write(function() img_of[id]:group_with(img_of[leader]) end) then
+                    and write(function() img_of[id]:group_with(img_of[leader]) end, 1, string.format("image %d (%s): group with image %d", id, img_of[id].filename, leader)) then
                     M.set_ledger_native(ledger, id, leader)
                     attached = attached + 1
                 end
@@ -1712,7 +1717,7 @@ function M.apply_native_groups(units, final_of, ledger, progress)
     if w.failed > 0 then
         notify_error(string.format("Assisted Grouping: %d native group changes failed: %s", w.failed, w.first_error))
     end
-    return { grouped = grouped, skipped = plan.skipped }
+    return { grouped = grouped, skipped = plan.skipped, unchanged = plan.unchanged }
 end
 
 local function count_groups(group_of)
@@ -1772,7 +1777,8 @@ function M.group_images(images, opts)
         tostring(opts.refine), tostring(opts.write_tags), tostring(opts.native_groups)))
 
     local job, run = nil, { ledger = nil, applying = false }
-    local okr, err = pcall(function()
+    local run_began = os.time()
+    local okr, err = C.logged_call(log, "group selection", function()
         job = start_job("Group selection", #images, true)
         local records = M.build_images(images, M.needs_tags(opts))
         local units = M.collapse(records)
@@ -1876,10 +1882,13 @@ function M.group_images(images, opts)
         -- The job bar's second half is the writes: tags, then darktable groups.
         local tags_share = not opts.write_tags and 0 or opts.native_groups and 0.25 or 0.5
         if opts.write_tags then
+            log("tags: started")
             flush_log()
+            local tags_began = os.time()
             local tags_done = apply_tags(run, records, wanted, job, function(fraction)
                 if job.valid then job.percent = 0.5 + tags_share * fraction end
             end)
+            log(string.format("tags: %s, %ds", tags_done and "done" or "stopped", os.time() - tags_began))
             if not tags_done then return end
         end
         if opts.native_groups then
@@ -1887,11 +1896,13 @@ function M.group_images(images, opts)
             -- Cancel is ignored from here on: half-built native groups are worse than finishing.
             log("native groups: started; a cancel from now on is ignored so no group is left half-built")
             flush_log()
+            local native_began = os.time()
             local counts = M.apply_native_groups(units, result.final_of, run.ledger, function(fraction)
                 if job.valid then job.percent = 0.5 + tags_share + (0.5 - tags_share) * fraction end
             end)
-            log(string.format("native groups: %d images grouped, %d skipped (already in a hand-made group)",
-                counts.grouped, counts.skipped))
+            log(string.format("native groups: %d images grouped, %d left as they were (already grouped this way), %d skipped (already in a hand-made group)",
+                counts.grouped, counts.unchanged, counts.skipped))
+            log(string.format("native groups: done, %ds", os.time() - native_began))
         end
         say(string.format("Assisted Grouping: done. %d images in %d groups (%s). Run %s.%s",
             #records, count_groups(result.final_of), timing_label, stamp, note))
@@ -1901,7 +1912,7 @@ function M.group_images(images, opts)
     -- so what this run made isn't mistaken for the user's next time.
     finish_job(job, run.applying and run.ledger or nil)
     if not okr then notify_error("Assisted Grouping: couldn't run. " .. tostring(err)) end
-    log("run finished")
+    log(string.format("run finished, %ds in total", os.time() - run_began))
     flush_log()
     run_next()
 end
@@ -1921,7 +1932,7 @@ function M.clear_marks(images)
     busy = true
     start_log("clear", #images)
     local job, ledger, changed = nil, nil, false
-    local okr, err = pcall(function()
+    local okr, err = C.logged_call(log, "clearing marks", function()
         job = start_job("Clear grouping marks", #images)
         ledger = read_ledger()
         local records, members_of, group_cache = {}, {}, {}
@@ -1939,7 +1950,7 @@ function M.clear_marks(images)
 
         local img_of = {}
         for _, r in ipairs(records) do img_of[r.id] = r.img end
-        local w = C.paced_writer(dt, WRITE_BUDGET, WRITE_SLEEP_MS)
+        local w = C.paced_writer(dt, WRITE_BUDGET, WRITE_SLEEP_MS, log)
         local write, n_tags, n_ungrouped = w.write, 0, 0
 
         changed = true
@@ -1958,7 +1969,7 @@ function M.clear_marks(images)
             local left = {}
             for _, name in ipairs(plan.detach) do
                 local tag = tags.find(name)
-                if tag and write(function() tags.detach(tag, img) end) then
+                if tag and write(function() tags.detach(tag, img) end, 1, string.format("image %d (%s): detach tag %s", plan.id, img.filename, name)) then
                     n_tags = n_tags + 1
                 elseif tag then
                     left[name] = true
@@ -1967,7 +1978,7 @@ function M.clear_marks(images)
             local native = nil
             if plan.ungroup then
                 -- No leader argument: darktable moves the image into a group of its own.
-                if write(function() img:group_with() end) then
+                if write(function() img:group_with() end, 1, string.format("image %d (%s): take out of its darktable group", plan.id, img.filename)) then
                     n_ungrouped = n_ungrouped + 1
                     ungrouped[plan.id] = true
                 else
@@ -1990,7 +2001,7 @@ function M.clear_marks(images)
             if #ok_ids >= 2 then
                 local leader = img_of[ok_ids[1]]
                 for i = 2, #ok_ids do
-                    write(function() img_of[ok_ids[i]]:group_with(leader) end)
+                    write(function() img_of[ok_ids[i]]:group_with(leader) end, 1, string.format("image %d (%s): group with image %d", ok_ids[i], img_of[ok_ids[i]].filename, ok_ids[1]))
                 end
                 n_restored = n_restored + 1
             end
@@ -2028,7 +2039,7 @@ function M.reset_to_pairs(images)
     end
     busy = true
     local job, ledger, changed = nil, nil, false
-    local okr, err = pcall(function()
+    local okr, err = C.logged_call(log, "reset to pairs", function()
         job = start_job("Reset to RAW+JPEG pairs", #images)
         local records, img_of, group_cache = {}, {}, {}
         for _, img in ipairs(images) do
@@ -2046,7 +2057,7 @@ function M.reset_to_pairs(images)
         flush_log()
         ledger = read_ledger()
 
-        local w = C.paced_writer(dt, WRITE_BUDGET, WRITE_SLEEP_MS)
+        local w = C.paced_writer(dt, WRITE_BUDGET, WRITE_SLEEP_MS, log)
         local write = w.write
 
         local record_ids = {}
@@ -2056,7 +2067,7 @@ function M.reset_to_pairs(images)
         -- The detach pass is the first half of the job bar, the attach pass the second.
         local alone = {}
         for i, id in ipairs(leaders_last(record_ids, img_of)) do
-            if write(function() img_of[id]:group_with() end) then
+            if write(function() img_of[id]:group_with() end, 1, string.format("image %d (%s): take out of its darktable group", id, img_of[id].filename)) then
                 alone[id] = true
                 if ledger[id] and ledger[id].native then
                     M.set_ledger_native(ledger, id, nil)
@@ -2075,7 +2086,7 @@ function M.reset_to_pairs(images)
             if #ok_ids >= 2 then
                 local leader = img_of[ok_ids[1]]
                 for i = 2, #ok_ids do
-                    write(function() img_of[ok_ids[i]]:group_with(leader) end)
+                    write(function() img_of[ok_ids[i]]:group_with(leader) end, 1, string.format("image %d (%s): group with image %d", ok_ids[i], img_of[ok_ids[i]].filename, ok_ids[1]))
                 end
                 n_pairs = n_pairs + 1
             end
@@ -2112,7 +2123,7 @@ function M.browse_bursts(images)
     end
     busy = true
     local job, ledger, changed = nil, nil, false
-    local okr, err = pcall(function()
+    local okr, err = C.logged_call(log, "browse as bursts", function()
         job = start_job("Browse as bursts", #images)
         local records = M.build_images(images, true)
         local units = M.collapse(records)

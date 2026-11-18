@@ -27,18 +27,14 @@ ok   sessions: the log counts them
 ok   sessions: the settings line carries the minimum burst size and the session gap
 ok   sessions off again: the Session tags are gone, Group stays
 ok   group, helper failed: still groups, on whole seconds
-ok   group, selection not restored: one toast says so
-ok   group, selection not restored: the job bar is closed
-ok   group, selection not restored: the ledger has the run's tags
-ok   clear, selection not restored: it wasn't held up by the last job
-ok   clear, selection not restored: one toast says so
-ok   clear, selection not restored: the job bar is closed
-ok   clear, selection not restored: the ledger forgets the cleared tags
-ok   after a selection that wasn't restored: the next job runs
-ok   after a selection that wasn't restored: no Lua error
+ok   group with tags on: the job bar is closed
+ok   group with tags on: the ledger has the run's tags
+ok   clear after group: it wasn't held up by the last job
+ok   clear after group: the job bar is closed
+ok   clear after group: the ledger forgets the cleared tags
+ok   group and clear: the selection is never changed
 ok   group with tags: tags were attached
-ok   group with tags: nothing is selected while they are attached
-ok   group with tags: the selection is back at the end
+ok   group with tags: the selection stays while they are attached
 ok   group with tags: every image gets one group tag
 ok   group with tags: the burst shares its tag
 ok   group with tags: the later frame has its own
@@ -54,8 +50,11 @@ ok   pairs, large group: every image is rewritten once
 ok   pairs, large group: reports them all
 ok   group, large burst: one darktable group
 ok   group, large burst: the job bar reaches the end
-ok   regroup, large burst: 40 detached once each, 39 attached
+ok   regroup, large burst: a group that already matches is not rewritten
 ok   regroup, large burst: the group is read from darktable once
+ok   regroup, large burst: the log counts the images left alone
+ok   regroup, one frame more: 41 detached once each, 40 attached
+ok   regroup, one frame more: one darktable group
 ok   clear, large burst: every image is rewritten once
 ok   clear, large burst: the job bar moved
 ok   clear, large burst: the frames are alone again
@@ -68,8 +67,7 @@ ok   bursts, no group tags: says what to do
 ok   pairs, darktable refuses: one toast with the count and the cause
 ok   pairs, darktable refuses: the job bar is closed
 ok   clear: tags were detached
-ok   clear: nothing is selected while they are detached
-ok   clear: the selection is back at the end
+ok   clear: the selection stays while they are detached
 ok   clear, darktable refuses: one toast with the count and the cause
 ok   clear, darktable refuses: the tags it could detach are gone
 ok   clear: says it started

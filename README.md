@@ -250,7 +250,7 @@ Capture times use a constant offset with no daylight saving (`isdst = false`), s
 ## Troubleshooting
 
 - **The panel isn't there.** Start darktable with `-d lua` and look for `LUA ERROR` in the log. On Windows the log is `Documents\Darktable\darktable-log.txt`. A `module ... not found` error means darktable is loading an old copy of `assisted_grouping.lua`: re-link or re-copy it from this repo.
-- **Every run writes a log** to `assisted_grouping.log` in darktable's config directory (`%LOCALAPPDATA%\darktable\assisted_grouping.log` on Windows); the run before it is kept as `assisted_grouping.prev.log`. It has the run stamp and every setting, the timing line, the frame and group counts, how many photos the parent layer left unsplit, the tags attached and detached, the darktable groups made and skipped, every message shown on screen, and the helper's errors. Start here when a result looks wrong.
+- **Every run writes a log** to `assisted_grouping.log` in darktable's config directory (`%LOCALAPPDATA%\darktable\assisted_grouping.log` on Windows); the 5 runs before it are kept as `assisted_grouping.prev.log` (the last one), `assisted_grouping.prev2.log` … `assisted_grouping.prev5.log`. Each line is written as it happens, so a crash leaves the last step in the file; each stage logs `started` and `done` with its seconds, and a failed write names its image. It has the run stamp and every setting, the timing line, the frame and group counts, how many photos the parent layer left unsplit, the tags attached and detached, the darktable groups made and skipped, every message shown on screen, and the helper's errors. Start here when a result looks wrong.
 - **"the plugins folder preference gives …, which has no python/exif_times.py."** Point the preference at the folder holding `darktable-assisted-grouping`, or clear it to auto-detect.
 - **The run always says whole-second.** Read the reason on the `timing:` line. If it counts frames with none, the helper couldn't read those files: on a RAW-only selection check that `exifread` is installed in the interpreter, or select the JPEGs too. "exif_times.py stopped with exit code …" usually means the interpreter has no Pillow: install `python/requirements.txt` into it.
 - **"another job is still running."** Wait, or cancel it from the progress bar.
@@ -272,6 +272,7 @@ Known gaps, not yet fixed:
 - **Clear acts on the selection only.** Unselected partners of a selected image (e.g. the JPEG of a selected RAW) keep their marks. Tags of old runs are detached but not deleted from darktable's tag library.
 - **Panel state** (checkboxes, text fields) isn't saved between sessions.
 - **"images grouped"** in the log counts the leader too.
+- **"left as they were"** in the log counts images whose darktable group already matched the result (same images, lowest id leading). A second run on the same selection writes no group changes.
 - **Narrow panel.** Labels end in an ellipsis when the right panel is narrow.
 - **The partial-burst warning** is static text, shown whatever you selected.
 - **Same-second runs** are stamped one second apart, so a stamp can be a second later than the run actually started.

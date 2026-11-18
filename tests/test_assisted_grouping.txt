@@ -143,6 +143,9 @@ ok   plan_native regroups an image whose group the plugin made
 ok   plan_native dissolves a ledger group for an image now alone
 ok   plan_native forms no group when skipping leaves one image
 ok   plan_native leaves a lone image in a hand-made group uncounted
+ok   plan_native leaves a group that already matches, led by its lowest id
+ok   plan_native regroups a matching group led by another image
+ok   plan_native regroups when the current group holds an image the plan leaves out
 ok   plan_native takes a RAW+JPEG pair darktable grouped on import into the burst
 ok   plan_native groups a pair that is its own final group
 ok   plan_native treats an unselected JPEG in the RAW's group as the same frame

@@ -1,17 +1,21 @@
+ok   CLI exit code
+ok   CLI log: start line with the file count
+ok   CLI log: the missing file is named
+ok   CLI log: done line counts files without a capture time
 ok   SubSec '47' -> +0.47
 ok   SubSec '5' -> +0.5
 ok   SubSec '047' -> +0.047
 ok   no subsec -> whole epoch
 ok   no subsec -> integral value
 ok   non-digit SubSec '8a' -> whole epoch
-ok   CLI exit code ()
+ok   CLI exit code
 ok   non-digit SubSec '8a' -> CLI whole precision
 ok   DateTimeOriginal 0000:00:00 00:00:00 -> None
 ok   no EXIF -> None
 ok   missing file -> None
 ok   synthetic ARW via exifread: SubSec '897' -> +0.897
 ok   junk ARW -> None
-ok   CLI exit code ()
+ok   CLI exit code
 ok   CLI row count
 ok   CLI subsec row id
 ok   CLI subsec row epoch
@@ -20,11 +24,13 @@ ok   CLI missing file -> blank epoch
 ok   CLI path with comma and quotes
 ok   CLI path with comma and quotes epoch
 ok   CLI mixed precision -> whole
-ok   CLI exit code ()
+ok   CLI exit code
 ok   CLI all subsec (unreadable ignored) -> subsecond
-ok   CLI exit code ()
+ok   CLI exit code
 ok   CLI with cameras: one precision row per camera, sorted, before the overall line
 
 --- stderr ---
-/private/tmp/claude-502/-Users-louis-davis-Documents-codebases/b11c51c0-5d67-4f13-9313-bb2ba27ef177/scratchpad/grouping/venv/lib/python3.14/site-packages/PIL/TiffImagePlugin.py:982: UserWarning: Corrupt EXIF data.  Expecting to read 2 bytes but only got 0. 
+23:02:15 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpu_m4_loz/missing.jpg: couldn't read the capture time (Pillow: FileNotFoundError: [Errno 2] No such file or directory: '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpu_m4_loz/missing.jpg'; exifread: FileNotFoundError: [Errno 2] No such file or directory: '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpu_m4_loz/missing.jpg')
+/Users/louis.davis/Documents/codebases/darktable/darktable-assisted-culling/.venv/lib/python3.14/site-packages/PIL/TiffImagePlugin.py:982: UserWarning: Corrupt EXIF data.  Expecting to read 2 bytes but only got 0. 
   warnings.warn(str(msg))
+23:02:15 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpu_m4_loz/junk.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpu_m4_loz/junk.arw')

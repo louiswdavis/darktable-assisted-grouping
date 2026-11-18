@@ -1,6 +1,8 @@
 # Run with: python python/test_probe_subsec.py
 # Exercises probe_subsec.py on JPEGs written with Pillow into a temp dir.
 
+import contextlib
+import io
 import os
 import struct
 import sys
@@ -82,8 +84,16 @@ def run_tests():
         not_image = os.path.join(tmp, "broken.arw")
         with open(not_image, "wb") as f:
             f.write(b"not an image")
-        check("unreadable file: all None, no raise", P.read_subsec_fields(not_image),
+        logged = io.StringIO()
+        with contextlib.redirect_stderr(logged):
+            got = P.read_subsec_fields(not_image)
+            P.read_subsec_fields(no_exif)
+        check("unreadable file: all None, no raise", got,
               {"DateTimeOriginal": None, "SubSecTimeOriginal": None, "SubSecDateTimeOriginal": None})
+        lines = [line for line in logged.getvalue().splitlines() if " py: " in line]  # exifread adds a line of its own
+        check("unreadable file: one log line, none for a readable file with no EXIF", len(lines), 1)
+        check("unreadable file: the line names the file and why Pillow failed",
+              "py: " + not_image + ": couldn't read the capture time (Pillow: UnidentifiedImageError" in lines[0], True)
 
         blank = {"DateTimeOriginal": None, "SubSecTimeOriginal": None, "SubSecDateTimeOriginal": None}
 

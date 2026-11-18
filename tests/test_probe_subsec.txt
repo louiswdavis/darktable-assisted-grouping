@@ -3,6 +3,8 @@ ok   subsec JPEG: DateTimeOriginal
 ok   subsec JPEG: SubSecDateTimeOriginal
 ok   no EXIF: all None
 ok   unreadable file: all None, no raise
+ok   unreadable file: one log line, none for a readable file with no EXIF
+ok   unreadable file: the line names the file and why Pillow failed
 ok   synthetic ARW: Pillow cannot open it
 ok   synthetic ARW: exifread fallback reads it
 ok   synthetic ARW: SubSec padding stripped
@@ -15,4 +17,5 @@ ok   format_line: blanks where absent
 all tests passed
 
 --- stderr ---
-File format not recognized.
+23:02:15 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpz11nxqzq/raw.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpz11nxqzq/raw.arw'; exifread: not installed)
+23:02:15 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpz11nxqzq/raw.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpz11nxqzq/raw.arw'; exifread: RuntimeError: corrupt RAW)

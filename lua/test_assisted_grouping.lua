@@ -18,7 +18,7 @@ end
 -- plugin_common.lua ---------------------------------------------------------------
 -- The same file in all three plugin repos; COMMON_HASH pins it. After changing it, copy it to the
 -- other two repos and put the hash this prints into their tests too.
-local COMMON_HASH = "a1814a00"
+local COMMON_HASH = "9c0c49b6"
 local PC = dofile(script_dir .. "/plugin_common.lua")
 local function fnv1a(text)
     local h = 2166136261
@@ -525,6 +525,32 @@ check("plan_native forms no group when skipping leaves one image",
 
 check("plan_native leaves a lone image in a hand-made group uncounted",
     plan_str(A.plan_native(A.collapse({ r2 }), { [2] = 1 }, {}, hand_two)), "detach ; groups ; skipped 0")
+
+do
+local function grouped(leader, records)
+    local out = {}
+    for _, r in ipairs(records) do out[#out + 1] = r end
+    out.leader = leader
+    return out
+end
+local burst_now = grouped(1, { r1, r2, r3 })
+local settled = { [1] = burst_now, [2] = burst_now, [3] = burst_now, [4] = grouped(4, { r4 }) }
+local settled_ledger = { [1] = { tags = {}, native = 1 }, [2] = { tags = {}, native = 1 }, [3] = { tags = {}, native = 1 } }
+check("plan_native leaves a group that already matches, led by its lowest id",
+    plan_str(A.plan_native(units, final, settled_ledger, settled)) .. "; unchanged "
+        .. A.plan_native(units, final, settled_ledger, settled).unchanged,
+    "detach ; groups ; skipped 0; unchanged 3")
+local led_by_2 = grouped(2, { r1, r2, r3 })
+check("plan_native regroups a matching group led by another image",
+    plan_str(A.plan_native(units, final, settled_ledger, { [1] = led_by_2, [2] = led_by_2, [3] = led_by_2, [4] = grouped(4, { r4 }) })),
+    "detach 1,2,3; groups 1:1,2,3; skipped 0")
+local wider = grouped(1, { r1, r2, r3, r4 })
+check("plan_native regroups when the current group holds an image the plan leaves out",
+    plan_str(A.plan_native(units, final, { [1] = { tags = {}, native = 1 }, [2] = { tags = {}, native = 1 },
+        [3] = { tags = {}, native = 1 }, [4] = { tags = {}, native = 1 } },
+        { [1] = wider, [2] = wider, [3] = wider, [4] = wider })),
+    "detach 1,2,3,4; groups 1:1,2,3; skipped 0")
+end
 
 local raw, jpg, r7 = rec(5, "e.cr2"), rec(6, "e.jpg"), rec(7, "f.cr2")
 local pair_units = A.collapse({ raw, jpg, r7 })
