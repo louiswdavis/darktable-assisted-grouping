@@ -2160,15 +2160,19 @@ local function install_panel()
             trace_check,
         },
         {
+            new_widget("section_label") { label = "group (reads capture times; writes groups and tags)" },
             group_button,
+            new_widget("section_label") { label = "browse as (darktable groups only; tags kept)" },
             new_widget("box") {
                 orientation = "horizontal",
-                new_widget("label") { label = "browse as", halign = "start" },
                 bursts_button,
                 pairs_button,
             },
         },
-        { clear_button },
+        {
+            new_widget("section_label") { label = "undo" },
+            clear_button,
+        },
     }
     local pages = {}
     for i, page in ipairs(M.PANEL_PAGES) do

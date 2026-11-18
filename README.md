@@ -193,12 +193,14 @@ A notice line below the pages says what would stop or undermine the next run, in
 
 ### 4 run
 
+Two headings, **group** and **browse as**.
+
 - **Group selection.** Runs the layers on the selected photos. The partial-burst warning sits under it.
-- **browse as**, with two buttons. **bursts** puts the selected photos back into their burst groups from the latest run's group tags; with no group tags it says "nothing to browse. The selection has no group tags; run Group selection with Group tags on first.". **pairs** ungroups the selected photos and their groups, then stacks each RAW with its JPEG again; tags stay. See [Re-running and clearing](#re-running-and-clearing).
+- **browse as** (darktable groups only; tags are kept), with two buttons. **bursts** puts the selected photos back into their burst groups from the latest run's group tags; with no group tags it says "nothing to browse. The selection has no group tags; run Group selection with Group tags on first.". **pairs** ungroups the selected photos and their groups, then stacks each RAW with its JPEG again; tags stay. See [Re-running and clearing](#re-running-and-clearing).
 
 ### 5 tools
 
-- **Clear grouping marks.** Removes the plugin's tags and darktable groups from the selected photos (see [Re-running and clearing](#re-running-and-clearing)).
+- **Clear grouping marks** (under **undo**). Removes the plugin's tags and darktable groups from the selected photos (see [Re-running and clearing](#re-running-and-clearing)).
 
 Everything in sections 1 to 3 is saved with the [preset](#presets).
 
