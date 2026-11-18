@@ -1,11 +1,20 @@
-13:48:05 lua: group started: darktable 5.6.2, 20 images
-13:48:05 lua: run stamp 2026-11-18 13:48:05; timing true, gap 2 s, camera false, tag nil, parent nil, refine false, tags false, native groups true
-13:48:05 lua: Assisted Grouping: Group selection started on 20 images…
-13:48:05 lua: running (10 files): "C:\Users\Louis\Pictures\DarkTable\Settings\Plugins/darktable-assisted-grouping/.venv/Scripts/python.exe" -u "C:\Users\Louis\Pictures\DarkTable\Settings\Plugins/darktable-assisted-grouping/python/exif_times.py" "C:\Users\Louis\AppData\Local\Temp/dt_assisted_grouping_1795009685_3_manifest.csv" "C:\Users\Louis\AppData\Local\Temp/dt_assisted_grouping_1795009685_3_results.csv"
-13:48:06 lua: exif_times.py exit 0
-13:48:06 lua: timing: sub-second
-13:48:06 lua: 10 frames in 2 groups (2 bursts)
-13:48:06 lua: native groups: started; a cancel from now on is ignored so no group is left half-built
-13:48:06 lua: native groups: 20 images grouped, 0 skipped (already in a hand-made group)
-13:48:06 lua: Assisted Grouping: done. 20 images in 2 groups (sub-second timing). Run 2026-11-18 13:48:05.
-13:48:07 lua: run finished
+19:26:00 lua: group started: darktable 5.6.2, 110 images
+19:26:00 lua: run stamp 2026-11-18 19:26:00; timing true, gap 2 s, min frames 2, session gap nil s, camera false, tag nil, parent nil, refine false, tags false, native groups true
+19:26:00 lua: Assisted Grouping: Group selection started on 110 images…
+19:26:00 lua: running (55 files): "C:\Users\Louis\Pictures\DarkTable\Settings\Plugins/darktable-assisted-grouping/.venv/Scripts/python.exe" -u "C:\Users\Louis\Pictures\DarkTable\Settings\Plugins/darktable-assisted-grouping/python/exif_times.py" "C:\Users\Louis\AppData\Local\Temp/dt_assisted_grouping_1795029960_1_manifest.csv" "C:\Users\Louis\AppData\Local\Temp/dt_assisted_grouping_1795029960_1_results.csv"
+19:26:02 lua: exif_times.py exit 0
+19:26:02 lua: timing: sub-second
+19:26:02 lua: 55 frames in 6 groups (6 bursts)
+19:26:02 lua: weakest links: largest time gap inside each of 6 groups, widest first (top 6)
+19:26:02 lua:   group 0005: 21 frames, 0.14 s before DSC00895.ARW
+19:26:02 lua:   group 0006: 6 frames, 0.13 s before DSC00910.ARW
+19:26:02 lua:   group 0004: 2 frames, 0.13 s before DSC00887.ARW
+19:26:02 lua:   group 0001: 15 frames, 0.13 s before DSC09176.ARW
+19:26:02 lua:   group 0003: 7 frames, 0.13 s before DSC09195.ARW
+19:26:02 lua:   group 0002: 4 frames, 0.13 s before DSC09188.ARW
+19:26:02 lua: selection: 55 images deselected while tags are written
+19:26:02 lua: native groups: started; a cancel from now on is ignored so no group is left half-built
+19:26:03 lua: native groups: timing: 0.3s in darktable calls, 17 pauses of 20 ms
+19:26:03 lua: native groups: 110 images grouped, 0 skipped (already in a hand-made group)
+19:26:03 lua: Assisted Grouping: done. 110 images in 6 groups (sub-second timing). Run 2026-11-18 19:26:00.
+19:26:04 lua: run finished

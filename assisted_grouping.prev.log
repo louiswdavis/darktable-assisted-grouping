@@ -1,4 +1,5 @@
-13:47:59 lua: clear started: darktable 5.6.2, 20 images
-13:47:59 lua: Assisted Grouping: Clear grouping marks started on 20 images…
-13:47:59 lua: clear: 20 images, 0 tags detached, 20 taken out of native groups, 10 frame groups restored, 0 failed
-13:47:59 lua: Assisted Grouping: cleared grouping marks from 20 images.
+19:24:17 lua: pairs started: darktable 5.6.2, 110 images
+19:24:17 lua: pairs: 110 images ungrouped, 55 frame groups made, 0 failed
+19:24:17 lua: pairs: timing: 0.2s in darktable calls, 13 pauses of 20 ms
+19:24:17 lua: Assisted Grouping: reset 110 images to 55 RAW+JPEG pairs. Tags kept.
+19:24:18 lua: ledger: dropped 2 images no longer in the library
