@@ -21,6 +21,10 @@ ok   pairs: reports the images in the selection's groups
 ok   pairs: the RAW is stacked with its JPEG
 ok   pairs: the next frame is out of the group
 ok   pairs: tags stay
+ok   pairs: the job bar reaches the end
+ok   pairs, large group: says how many images the groups hold
+ok   pairs, large group: every image is rewritten once
+ok   pairs, large group: reports them all
 ok   bursts: says it started
 ok   bursts: the job bar is closed
 ok   bursts: reports the bursts

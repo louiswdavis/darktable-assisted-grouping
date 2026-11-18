@@ -1754,14 +1754,32 @@ function M.reset_to_pairs(images)
             for _, other in ipairs(img:get_group_members()) do add(other) end
         end
         start_log("pairs", #records)
+        if #records > #images then
+            say(string.format("Assisted Grouping: the selection's groups hold %d images; resetting all of them.", #records))
+        end
+        flush_log()
         ledger = read_ledger()
 
         local w = C.paced_writer(dt, WRITE_BUDGET, WRITE_SLEEP_MS)
         local write = w.write
 
-        -- Every image is detached before any attach, so no leader is pulled out of a group mid-way.
-        local alone = {}
+        -- Group leaders go last: taking a leader out makes darktable rewrite every image
+        -- left in its group, so leader-first costs the group size squared.
+        local followers, leaders = {}, {}
         for _, r in ipairs(records) do
+            local leader = img_of[r.id].group_leader
+            if leader and tonumber(leader.id) ~= r.id then
+                followers[#followers + 1] = r
+            else
+                leaders[#leaders + 1] = r
+            end
+        end
+        for _, r in ipairs(leaders) do followers[#followers + 1] = r end
+
+        -- Every image is detached before any attach, so no leader is pulled out of a group mid-way.
+        -- The detach pass is the first half of the job bar, the attach pass the second.
+        local alone = {}
+        for i, r in ipairs(followers) do
             if write(function() img_of[r.id]:group_with() end) then
                 alone[r.id] = true
                 if ledger[r.id] and ledger[r.id].native then
@@ -1769,9 +1787,11 @@ function M.reset_to_pairs(images)
                     changed = true
                 end
             end
+            job.percent = 0.5 * i / #records
         end
         local n_pairs = 0
-        for _, group in ipairs(M.plan_pairs(records)) do
+        local groups = M.plan_pairs(records)
+        for g, group in ipairs(groups) do
             local ok_ids = {}
             for _, id in ipairs(group.members) do
                 if alone[id] then ok_ids[#ok_ids + 1] = id end
@@ -1783,6 +1803,7 @@ function M.reset_to_pairs(images)
                 end
                 n_pairs = n_pairs + 1
             end
+            job.percent = 0.5 + 0.5 * g / #groups
         end
         log(string.format("pairs: %d images ungrouped, %d frame groups made, %d failed",
             #records, n_pairs, w.failed))

@@ -81,6 +81,7 @@ local prints, jobs, images_by_id, tags_by_name, panel = {}, {}, {}, {}, nil
 local prefs = { ["assisted_plugins/plugins_root"] = ROOT .. "/plugins" }
 local PREF_EMPTY = { string = "", directory = "", file = "", integer = 0, float = 0, bool = false }
 local group_error = nil -- set to make every darktable group change fail
+local group_writes = 0
 
 local dt = {
     configuration = { tmp_dir = ROOT .. "/tmp", config_dir = ROOT .. "/config", version = "test", running_os = WINDOWS and "windows" or "macos" },
@@ -159,12 +160,28 @@ local function image(id, filename, taken)
         end
         return members
     end
+    -- As in darktable: taking a leader out hands its group to the next member and rewrites
+    -- every image left in it. `group_writes` counts the images darktable rewrites.
     function img:group_with(leader)
         if group_error then error(group_error, 0) end
+        group_writes = group_writes + 1
+        if self.group == self.id then
+            local new_leader = nil
+            for other_id = 1, #images_by_id do
+                local other = images_by_id[other_id]
+                if other ~= self and other.group == self.id then
+                    new_leader = new_leader or other.id
+                    other.group = new_leader
+                    group_writes = group_writes + 1
+                end
+            end
+        end
         self.group = leader and leader.group or self.id
     end
     images_by_id[id] = img
-    return img
+    return setmetatable(img, { __index = function(self, key)
+        if key == "group_leader" then return images_by_id[self.group] end
+    end })
 end
 
 local function printed(text)
@@ -263,6 +280,22 @@ check("pairs: reports the images in the selection's groups", last_print(),
 check("pairs: the RAW is stacked with its JPEG", raw1.group == jpeg1.group, true)
 check("pairs: the next frame is out of the group", jpeg2.group ~= jpeg1.group, true)
 check("pairs: tags stay", group_tag_count(jpeg2), 1)
+check("pairs: the job bar reaches the end", jobs[1] and jobs[1].percent, 1.0)
+
+-- A large hand-made group: selecting one frame resets all of it, leader last.
+local stack = {}
+for id = 101, 140 do stack[#stack + 1] = id end
+for id = 5, 100 do image(id, string.format("PAD%05d.JPG", id), "2026:05:02 09:00:00") end
+for _, id in ipairs(stack) do
+    image(id, string.format("DSC%05d.JPG", id), "2026:05:02 10:00:00").group = 101
+end
+group_writes = 0
+click("pairs", { images_by_id[101] })
+check("pairs, large group: says how many images the groups hold", printed(
+    "Assisted Grouping: the selection's groups hold 40 images; resetting all of them."), true)
+check("pairs, large group: every image is rewritten once", group_writes, 40)
+check("pairs, large group: reports them all", last_print(),
+    "Assisted Grouping: reset 40 images to 0 RAW+JPEG pairs. Tags kept.")
 
 -- Browse as bursts ------------------------------------------------------------------
 click("bursts", all)
