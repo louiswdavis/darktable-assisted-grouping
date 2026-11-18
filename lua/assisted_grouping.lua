@@ -1732,15 +1732,13 @@ local function count_parent_unsplit(units, parent)
     return n
 end
 
--- The end of every job: puts the selection back, saves `ledger` (nil for nothing to save),
--- closes the job bar and clears busy. A step that raises is reported and the rest still run.
-local function finish_job(job, selected, ledger)
-    local ok_s, err_s = pcall(C.restore_selection, dt, selected)
+-- The end of every job: saves `ledger` (nil for nothing to save), closes the job bar and
+-- clears busy. A step that raises is reported and the rest still run.
+local function finish_job(job, ledger)
     local ok_l, err_l = true, nil
     if ledger then ok_l, err_l = pcall(write_ledger, ledger) end
     local ok_j, err_j = pcall(end_job, job)
     busy = false
-    if not ok_s then notify_error("Assisted Grouping: couldn't restore the selection: " .. tostring(err_s)) end
     if not ok_l then
         notify_error("Assisted Grouping: couldn't save the ledger: " .. tostring(err_l)
             .. ". Tags and groups this run made will count as yours next run.")
@@ -1875,7 +1873,6 @@ function M.group_images(images, opts)
             return
         end
         run.ledger = read_ledger()
-        run.selected = C.hide_selection(dt, log)
         -- The job bar's second half is the writes: tags, then darktable groups.
         local tags_share = not opts.write_tags and 0 or opts.native_groups and 0.25 or 0.5
         if opts.write_tags then
@@ -1902,7 +1899,7 @@ function M.group_images(images, opts)
 
     -- Saved once anything may have changed, even if the apply stopped or errored partway,
     -- so what this run made isn't mistaken for the user's next time.
-    finish_job(job, run.selected, run.applying and run.ledger or nil)
+    finish_job(job, run.applying and run.ledger or nil)
     if not okr then notify_error("Assisted Grouping: couldn't run. " .. tostring(err)) end
     log("run finished")
     flush_log()
@@ -1924,7 +1921,6 @@ function M.clear_marks(images)
     busy = true
     start_log("clear", #images)
     local job, ledger, changed = nil, nil, false
-    local selected
     local okr, err = pcall(function()
         job = start_job("Clear grouping marks", #images)
         ledger = read_ledger()
@@ -1947,7 +1943,6 @@ function M.clear_marks(images)
         local write, n_tags, n_ungrouped = w.write, 0, 0
 
         changed = true
-        selected = C.hide_selection(dt, log)
         local plans, restore = M.plan_clear(records, ledger, members_of)
         local plan_of, plan_ids = {}, {}
         for _, plan in ipairs(plans) do
@@ -2012,7 +2007,7 @@ function M.clear_marks(images)
         end
     end)
 
-    finish_job(job, selected, changed and ledger or nil)
+    finish_job(job, changed and ledger or nil)
     if not okr then notify_error("Assisted Grouping: clearing marks failed. " .. tostring(err)) end
     flush_log()
     run_next()
@@ -2097,7 +2092,7 @@ function M.reset_to_pairs(images)
         end
     end)
 
-    finish_job(job, nil, changed and ledger or nil)
+    finish_job(job, changed and ledger or nil)
     if not okr then notify_error("Assisted Grouping: reset to pairs failed. " .. tostring(err)) end
     flush_log()
     run_next()
@@ -2146,7 +2141,7 @@ function M.browse_bursts(images)
         say(msg)
     end)
 
-    finish_job(job, nil, changed and ledger or nil)
+    finish_job(job, changed and ledger or nil)
     if not okr then notify_error("Assisted Grouping: browse as bursts failed. " .. tostring(err)) end
     flush_log()
     run_next()

@@ -81,7 +81,7 @@ local prints, jobs, images_by_id, tags_by_name, panel = {}, {}, {}, {}, nil
 local prefs = { ["assisted_plugins/plugins_root"] = ROOT .. "/plugins" }
 local PREF_EMPTY = { string = "", directory = "", file = "", integer = 0, float = 0, bool = false }
 local group_error = nil -- set to make every darktable group change fail
-local selection_error = nil -- set to make darktable refuse to select images again
+local selection_sets = 0 -- writes to the selection so far
 local group_writes, group_reads = 0, 0
 
 -- how many images were selected at each tag attach and detach
@@ -140,8 +140,10 @@ dt = {
         views = { lighttable = {} },
         selection = function(images)
             local previous = dt.gui.action_images
-            if images and #images > 0 and selection_error then error(selection_error, 0) end
-            if images then dt.gui.action_images = images end
+            if images then
+                selection_sets = selection_sets + 1
+                dt.gui.action_images = images
+            end
             return previous
         end,
         action_images = {},
@@ -351,38 +353,29 @@ check("group, helper failed: still groups, on whole seconds",
     last_print():find("done. 4 images in 2 groups (whole-second timing)", 1, true) ~= nil, true)
 PYTHON.exit = 0
 
--- darktable refuses to put the selection back: the job still ends and the ledger is saved.
 local function ledger_text()
     return read_file(ROOT .. "/config/assisted_grouping/ledger.csv") or ""
 end
-selection_error = "selection refused"
 tags_check.value = true
+selection_sets = 0
 click("Group selection", all)
-check("group, selection not restored: one toast says so",
-    printed("Assisted Grouping: couldn't restore the selection: selection refused"), true)
-check("group, selection not restored: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
-check("group, selection not restored: the ledger has the run's tags",
+check("group with tags on: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
+check("group with tags on: the ledger has the run's tags",
     group_tag_count(jpeg1) == 1 and ledger_text():find(jpeg1.tags[1].name, 1, true) ~= nil, true)
 click("Clear grouping marks", all)
-check("clear, selection not restored: it wasn't held up by the last job", printed("another job is still running"), false)
-check("clear, selection not restored: one toast says so",
-    printed("Assisted Grouping: couldn't restore the selection: selection refused"), true)
-check("clear, selection not restored: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
-check("clear, selection not restored: the ledger forgets the cleared tags",
+check("clear after group: it wasn't held up by the last job", printed("another job is still running"), false)
+check("clear after group: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
+check("clear after group: the ledger forgets the cleared tags",
     group_tag_count(jpeg1) == 0 and ledger_text():find("Assisted Grouping|", 1, true) == nil, true)
-selection_error = nil
+check("group and clear: the selection is never changed", selection_sets, 0)
 tags_check.value = false
-click("Group selection", all)
-check("after a selection that wasn't restored: the next job runs", printed("another job is still running"), false)
-check("after a selection that wasn't restored: no Lua error", lua_errors(), nil)
 
 -- Group tags on, as the panel's checkbox sets it
 prints, jobs, PYTHON.runs = {}, {}, {}
 selected_at_attach = {}
 G.group_images(all, { timing = true, gap = 2, camera = false, refine = false, write_tags = true, trace_tags = false, native_groups = true })
 check("group with tags: tags were attached", #selected_at_attach > 0, true)
-check("group with tags: nothing is selected while they are attached", math.max(0, table.unpack(selected_at_attach)), 0)
-check("group with tags: the selection is back at the end", dt.gui.action_images, all)
+check("group with tags: the selection stays while they are attached", math.min(table.unpack(selected_at_attach)), #all)
 check("group with tags: every image gets one group tag",
     group_tag_count(jpeg1) + group_tag_count(jpeg2) + group_tag_count(jpeg3) + group_tag_count(raw1), 4)
 check("group with tags: the burst shares its tag", jpeg1.tags[1] == jpeg2.tags[1] and jpeg1.tags[1] == raw1.tags[1], true)
@@ -452,8 +445,7 @@ check("pairs, darktable refuses: the job bar is closed", #jobs == 1 and jobs[1].
 selected_at_detach = {}
 click("Clear grouping marks", all)
 check("clear: tags were detached", #selected_at_detach > 0, true)
-check("clear: nothing is selected while they are detached", math.max(0, table.unpack(selected_at_detach)), 0)
-check("clear: the selection is back at the end", dt.gui.action_images, all)
+check("clear: the selection stays while they are detached", math.min(table.unpack(selected_at_detach)), #all)
 check("clear, darktable refuses: one toast with the count and the cause", last_print(),
     "Assisted Grouping: cleared grouping marks from 4 images, but 3 marks couldn't be cleared (database is locked). Clear again to retry.")
 check("clear, darktable refuses: the tags it could detach are gone", group_tag_count(jpeg1), 0)
