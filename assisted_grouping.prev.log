@@ -1,13 +1,4 @@
-13:29:14 lua: group started: darktable 5.6.2, 20 images
-13:29:14 lua: run stamp 2026-11-18 13:29:14; timing true, gap 2 s, camera false, tag nil, parent nil, refine false, tags false, native groups true
-13:29:14 lua: Assisted Grouping: Group selection started on 20 images…
-13:29:14 lua: running (10 files): "C:\Users\Louis\Pictures\DarkTable\Settings\Plugins/darktable-assisted-grouping/.venv/Scripts/python.exe" -u "C:\Users\Louis\Pictures\DarkTable\Settings\Plugins/darktable-assisted-grouping/python/exif_times.py" "C:\Users\Louis\AppData\Local\Temp/dt_assisted_grouping_1795008554_1_manifest.csv" "C:\Users\Louis\AppData\Local\Temp/dt_assisted_grouping_1795008554_1_results.csv"
-13:29:14 lua: exif_times.py exit 0
-13:29:14 lua: timing: sub-second
-13:29:14 lua: 10 frames in 2 groups (2 bursts)
-13:29:15 lua: native groups: started; a cancel from now on is ignored so no group is left half-built
-13:29:15 lua: native groups: 0 images grouped, 20 skipped (already in a hand-made group)
-13:29:15 lua: Assisted Grouping: done. 20 images in 2 groups (sub-second timing). Run 2026-11-18 13:29:14.
-13:29:16 lua: ledger: dropped 62 images no longer in the library
-13:29:16 lua: run finished
-13:29:58 lua: Assisted Grouping: Reset to RAW+JPEG pairs started on 20 images…
+13:47:59 lua: clear started: darktable 5.6.2, 20 images
+13:47:59 lua: Assisted Grouping: Clear grouping marks started on 20 images…
+13:47:59 lua: clear: 20 images, 0 tags detached, 20 taken out of native groups, 10 frame groups restored, 0 failed
+13:47:59 lua: Assisted Grouping: cleared grouping marks from 20 images.
