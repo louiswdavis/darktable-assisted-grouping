@@ -1479,7 +1479,7 @@ function M.apply_native_groups(units, final_of, ledger)
         end
     end
     if w.failed > 0 then
-        notify_error(string.format("Assisted Grouping: %d native group changes w.failed: %s", w.failed, w.first_error))
+        notify_error(string.format("Assisted Grouping: %d native group changes failed: %s", w.failed, w.first_error))
     end
     return { grouped = grouped, skipped = plan.skipped }
 end
@@ -1609,7 +1609,7 @@ function M.group_images(images, opts)
             log(string.format("native groups: %d images grouped, %d skipped (already in a hand-made group)",
                 counts.grouped, counts.skipped))
         end
-        say(string.format("Assisted Grouping: %d images in %d groups (%s). Run %s.%s",
+        say(string.format("Assisted Grouping: done. %d images in %d groups (%s). Run %s.%s",
             #records, count_groups(result.final_of), timing_label, stamp, note))
     end)
 
@@ -1706,7 +1706,7 @@ function M.clear_marks(images)
                 n_restored = n_restored + 1
             end
         end
-        log(string.format("clear: %d images, %d tags detached, %d taken out of native groups, %d frame groups restored, %d w.failed",
+        log(string.format("clear: %d images, %d tags detached, %d taken out of native groups, %d frame groups restored, %d failed",
             #records, n_tags, n_ungrouped, n_restored, w.failed))
         if w.failed > 0 then
             notify_error(string.format("Assisted Grouping: cleared grouping marks from %d images, but %d marks couldn't be cleared (%s). Clear again to retry.",
@@ -1784,7 +1784,7 @@ function M.reset_to_pairs(images)
                 n_pairs = n_pairs + 1
             end
         end
-        log(string.format("pairs: %d images ungrouped, %d frame groups made, %d w.failed",
+        log(string.format("pairs: %d images ungrouped, %d frame groups made, %d failed",
             #records, n_pairs, w.failed))
         if w.failed > 0 then
             notify_error(string.format("Assisted Grouping: reset %d images to %d RAW+JPEG pairs, but %d group changes failed (%s). Reset again to retry. Tags kept.",
@@ -1823,7 +1823,7 @@ function M.browse_bursts(images)
         local base_of = M.base_of_from_tags(units)
         start_log("bursts", #records)
         if next(base_of) == nil then
-            say("Assisted Grouping: no group tags: run Group selection with Group tags on")
+            say("Assisted Grouping: nothing to browse. The selection has no group tags; run Group selection with Group tags on first.")
             return
         end
         local result = M.run_layers(units, { alone = true, base_of = base_of })

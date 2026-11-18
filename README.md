@@ -127,7 +127,7 @@ A RAW and a JPEG with the same folder and filename stem (extension and case igno
 
 **Clear grouping marks** removes, from the selected images only, the tags and darktable groups the ledger says the plugin made, and drops their ledger rows. An image you moved out of a plugin group by hand is left where it is. Your own tags and groups stay. The selected images of one frame (a RAW+JPEG pair or duplicates, same folder and filename stem) that Clear takes out of a plugin group are put back into one darktable group, led by the lowest id, so Clear doesn't break up the pairs darktable grouped at import.
 
-**browse as pairs** takes the selected images, and every image grouped with them, out of their darktable groups, then puts each frame's files (same folder and filename stem) back into one group led by the lowest id, as darktable does at import. Tags stay, including the group tags, so you can switch between burst groups and pairs: **browse as pairs** after culling to browse each kept frame with its JPEG stacked, then click **browse as bursts** to come back. Hand-made groups are reset too, and the ledger forgets the plugin's darktable groups for these images. **browse as bursts** puts the selected photos back into their burst groups from the latest run's group tags, with no Python and no capture times read; it needs Group tags to have been on, and on untagged frames it says "no group tags: run Group selection with Group tags on". **Group selection** also brings the bursts back, but runs the whole pipeline.
+**browse as pairs** takes the selected images, and every image grouped with them, out of their darktable groups, then puts each frame's files (same folder and filename stem) back into one group led by the lowest id, as darktable does at import. Tags stay, including the group tags, so you can switch between burst groups and pairs: **browse as pairs** after culling to browse each kept frame with its JPEG stacked, then click **browse as bursts** to come back. Hand-made groups are reset too, and the ledger forgets the plugin's darktable groups for these images. **browse as bursts** puts the selected photos back into their burst groups from the latest run's group tags, with no Python and no capture times read; it needs Group tags to have been on, and on untagged frames it says "nothing to browse. The selection has no group tags; run Group selection with Group tags on first.". **Group selection** also brings the bursts back, but runs the whole pipeline.
 
 ### The ledger
 
@@ -194,7 +194,7 @@ A notice line below the pages says what would stop or undermine the next run, in
 ### 4 run
 
 - **Group selection.** Runs the layers on the selected photos. The partial-burst warning sits under it.
-- **browse as**, with two buttons. **bursts** puts the selected photos back into their burst groups from the latest run's group tags; with no group tags it says "no group tags: run Group selection with Group tags on". **pairs** ungroups the selected photos and their groups, then stacks each RAW with its JPEG again; tags stay. See [Re-running and clearing](#re-running-and-clearing).
+- **browse as**, with two buttons. **bursts** puts the selected photos back into their burst groups from the latest run's group tags; with no group tags it says "nothing to browse. The selection has no group tags; run Group selection with Group tags on first.". **pairs** ungroups the selected photos and their groups, then stacks each RAW with its JPEG again; tags stay. See [Re-running and clearing](#re-running-and-clearing).
 
 ### 5 tools
 
