@@ -1393,7 +1393,7 @@ end
 -- Syncs each image's group tags to `wanted`. Sets run.applying before the first write
 -- and updates run.ledger per image, so the caller can save the ledger even when this
 -- stops or errors partway.
-local function apply_tags(run, records, wanted, job)
+local function apply_tags(run, records, wanted, job, progress)
     local ledger = run.ledger
     local tag_objs = {}
     local w = C.paced_writer(dt, WRITE_BUDGET, WRITE_SLEEP_MS)
@@ -1404,7 +1404,8 @@ local function apply_tags(run, records, wanted, job)
     end
 
     run.applying = true
-    for i, plan in ipairs(M.plan_tag_changes(records, wanted, ledger)) do
+    local plans = M.plan_tag_changes(records, wanted, ledger)
+    for i, plan in ipairs(plans) do
         local r, mine = plan.record, plan.mine
         w.write(function()
             for _, name in ipairs(plan.remove) do
@@ -1419,6 +1420,7 @@ local function apply_tags(run, records, wanted, job)
             end
         end, #plan.add + #plan.remove)
         M.set_ledger_tags(ledger, r.id, mine)
+        progress(i / #plans)
         if not job.valid then
             say(string.format("Assisted Grouping: stopped while writing tags; %d of %d images were updated. Run again to finish.",
                 i, #records))
@@ -1432,20 +1434,48 @@ local function apply_tags(run, records, wanted, job)
     return true
 end
 
+-- The images in `img`'s darktable group as { id, dir, filename, img } records, itself included.
+-- `cache` is keyed by group leader, so each group is read from darktable once.
+local function group_members(img, cache)
+    local leader = img.group_leader
+    local key = tonumber(leader and leader.id or img.id)
+    if not cache[key] then
+        local list = {}
+        for _, other in ipairs(img:get_group_members()) do
+            list[#list + 1] = { id = tonumber(other.id), dir = other.path, filename = other.filename, img = other }
+        end
+        cache[key] = list
+    end
+    return cache[key]
+end
+
+-- `ids` with group leaders moved to the end. Taking a leader out makes darktable rewrite every
+-- image left in its group, so leader-first costs the group size squared.
+local function leaders_last(ids, img_of)
+    local followers, leaders = {}, {}
+    for _, id in ipairs(ids) do
+        local leader = img_of[id].group_leader
+        if leader and tonumber(leader.id) ~= id then
+            followers[#followers + 1] = id
+        else
+            leaders[#leaders + 1] = id
+        end
+    end
+    for _, id in ipairs(leaders) do followers[#followers + 1] = id end
+    return followers
+end
+
 -- Writes one native group per final group of 2+ images, led by its lowest id.
 -- Every image is detached into its own group before any attach: `group_with` on an
 -- image still in an old group would scatter it. Updates the ledger per image, so a
 -- partial failure still leaves it accurate.
-function M.apply_native_groups(units, final_of, ledger)
-    local img_of, members_of = {}, {}
+-- `progress(fraction)` is called as the work advances: detaching is the first half, attaching the second.
+function M.apply_native_groups(units, final_of, ledger, progress)
+    local img_of, members_of, group_cache = {}, {}, {}
     for _, unit in ipairs(units) do
         for _, m in ipairs(unit.members) do
             img_of[m.id] = m.img
-            local list = {}
-            for _, other in ipairs(m.img:get_group_members()) do
-                list[#list + 1] = { id = tonumber(other.id), dir = other.path, filename = other.filename }
-            end
-            members_of[m.id] = list
+            members_of[m.id] = group_members(m.img, group_cache)
         end
     end
 
@@ -1454,14 +1484,15 @@ function M.apply_native_groups(units, final_of, ledger)
     local write, grouped = w.write, 0
 
     local detached = {}
-    for _, id in ipairs(plan.detach) do
+    for i, id in ipairs(leaders_last(plan.detach, img_of)) do
         -- No leader argument: darktable moves the image into a group of its own.
         if write(function() img_of[id]:group_with() end) then
             detached[id] = true
             M.set_ledger_native(ledger, id, nil)
         end
+        if progress then progress(0.5 * i / #plan.detach) end
     end
-    for _, group in ipairs(plan.groups) do
+    for g, group in ipairs(plan.groups) do
         local leader = group.leader
         if detached[leader] then
             local attached = 0
@@ -1477,6 +1508,7 @@ function M.apply_native_groups(units, final_of, ledger)
                 grouped = grouped + attached + 1
             end
         end
+        if progress then progress(0.5 + 0.5 * g / #plan.groups) end
     end
     if w.failed > 0 then
         notify_error(string.format("Assisted Grouping: %d native group changes failed: %s", w.failed, w.first_error))
@@ -1598,14 +1630,23 @@ function M.group_images(images, opts)
             return
         end
         run.ledger = read_ledger()
+        -- The job bar's second half is the writes: tags, then darktable groups.
+        local tags_share = not opts.write_tags and 0 or opts.native_groups and 0.25 or 0.5
         if opts.write_tags then
-            if not apply_tags(run, records, wanted, job) then return end
+            flush_log()
+            local tags_done = apply_tags(run, records, wanted, job, function(fraction)
+                if job.valid then job.percent = 0.5 + tags_share * fraction end
+            end)
+            if not tags_done then return end
         end
         if opts.native_groups then
             run.applying = true
             -- Cancel is ignored from here on: half-built native groups are worse than finishing.
             log("native groups: started; a cancel from now on is ignored so no group is left half-built")
-            local counts = M.apply_native_groups(units, result.final_of, run.ledger)
+            flush_log()
+            local counts = M.apply_native_groups(units, result.final_of, run.ledger, function(fraction)
+                if job.valid then job.percent = 0.5 + tags_share + (0.5 - tags_share) * fraction end
+            end)
             log(string.format("native groups: %d images grouped, %d skipped (already in a hand-made group)",
                 counts.grouped, counts.skipped))
         end
@@ -1642,14 +1683,12 @@ function M.clear_marks(images)
     local okr, err = pcall(function()
         job = start_job("Clear grouping marks", #images)
         ledger = read_ledger()
-        local records, members_of = {}, {}
+        local records, members_of, group_cache = {}, {}, {}
         for _, img in ipairs(images) do
             local id = tonumber(img.id)
             if ledger[id] then
                 records[#records + 1] = { id = id, img = img, tags = M.tags_of(img), dir = img.path, filename = img.filename }
-                local list = {}
-                for _, other in ipairs(img:get_group_members()) do list[#list + 1] = { id = tonumber(other.id) } end
-                members_of[id] = list
+                members_of[id] = group_members(img, group_cache)
             end
         end
         if #records == 0 then
@@ -1664,8 +1703,16 @@ function M.clear_marks(images)
 
         changed = true
         local plans, restore = M.plan_clear(records, ledger, members_of)
-        local ungrouped = {}
+        local plan_of, plan_ids = {}, {}
         for _, plan in ipairs(plans) do
+            plan_of[plan.id] = plan
+            plan_ids[#plan_ids + 1] = plan.id
+        end
+        flush_log()
+        -- Clearing is the first 80% of the job bar, restoring the frame groups the rest.
+        local ungrouped = {}
+        for i, id in ipairs(leaders_last(plan_ids, img_of)) do
+            local plan = plan_of[id]
             local entry, img = ledger[plan.id], img_of[plan.id]
             local left = {}
             for _, name in ipairs(plan.detach) do
@@ -1688,12 +1735,13 @@ function M.clear_marks(images)
             end
             M.set_ledger_tags(ledger, plan.id, left)
             M.set_ledger_native(ledger, plan.id, native)
+            job.percent = 0.8 * i / #plans
         end
         -- Every image above was detached into a group of its own before any attach here,
         -- so re-forming a frame's group can't pull a leader out of another group.
         -- These are darktable's import groups, not the plugin's, so the ledger skips them.
         local n_restored = 0
-        for _, group in ipairs(restore) do
+        for g, group in ipairs(restore) do
             local ok_ids = {}
             for _, id in ipairs(group.members) do
                 if ungrouped[id] then ok_ids[#ok_ids + 1] = id end
@@ -1705,6 +1753,7 @@ function M.clear_marks(images)
                 end
                 n_restored = n_restored + 1
             end
+            job.percent = 0.8 + 0.2 * g / #restore
         end
         log(string.format("clear: %d images, %d tags detached, %d taken out of native groups, %d frame groups restored, %d failed",
             #records, n_tags, n_ungrouped, n_restored, w.failed))
@@ -1741,17 +1790,14 @@ function M.reset_to_pairs(images)
     local job, ledger, changed = nil, nil, false
     local okr, err = pcall(function()
         job = start_job("Reset to RAW+JPEG pairs", #images)
-        local records, img_of = {}, {}
-        local function add(img)
-            local id = tonumber(img.id)
-            if not img_of[id] then
-                img_of[id] = img
-                records[#records + 1] = { id = id, dir = img.path, filename = img.filename }
-            end
-        end
+        local records, img_of, group_cache = {}, {}, {}
         for _, img in ipairs(images) do
-            add(img)
-            for _, other in ipairs(img:get_group_members()) do add(other) end
+            for _, member in ipairs(group_members(img, group_cache)) do
+                if not img_of[member.id] then
+                    img_of[member.id] = member.img
+                    records[#records + 1] = { id = member.id, dir = member.dir, filename = member.filename }
+                end
+            end
         end
         start_log("pairs", #records)
         if #records > #images then
@@ -1763,27 +1809,17 @@ function M.reset_to_pairs(images)
         local w = C.paced_writer(dt, WRITE_BUDGET, WRITE_SLEEP_MS)
         local write = w.write
 
-        -- Group leaders go last: taking a leader out makes darktable rewrite every image
-        -- left in its group, so leader-first costs the group size squared.
-        local followers, leaders = {}, {}
-        for _, r in ipairs(records) do
-            local leader = img_of[r.id].group_leader
-            if leader and tonumber(leader.id) ~= r.id then
-                followers[#followers + 1] = r
-            else
-                leaders[#leaders + 1] = r
-            end
-        end
-        for _, r in ipairs(leaders) do followers[#followers + 1] = r end
+        local record_ids = {}
+        for _, r in ipairs(records) do record_ids[#record_ids + 1] = r.id end
 
         -- Every image is detached before any attach, so no leader is pulled out of a group mid-way.
         -- The detach pass is the first half of the job bar, the attach pass the second.
         local alone = {}
-        for i, r in ipairs(followers) do
-            if write(function() img_of[r.id]:group_with() end) then
-                alone[r.id] = true
-                if ledger[r.id] and ledger[r.id].native then
-                    M.set_ledger_native(ledger, r.id, nil)
+        for i, id in ipairs(leaders_last(record_ids, img_of)) do
+            if write(function() img_of[id]:group_with() end) then
+                alone[id] = true
+                if ledger[id] and ledger[id].native then
+                    M.set_ledger_native(ledger, id, nil)
                     changed = true
                 end
             end
@@ -1843,6 +1879,7 @@ function M.browse_bursts(images)
         local units = M.collapse(records)
         local base_of = M.base_of_from_tags(units)
         start_log("bursts", #records)
+        flush_log()
         if next(base_of) == nil then
             say("Assisted Grouping: nothing to browse. The selection has no group tags; run Group selection with Group tags on first.")
             return
@@ -1854,7 +1891,9 @@ function M.browse_bursts(images)
         end
         ledger = read_ledger()
         changed = true
-        local counts = M.apply_native_groups(units, result.final_of, ledger)
+        local counts = M.apply_native_groups(units, result.final_of, ledger, function(fraction)
+            job.percent = fraction
+        end)
         log(string.format("bursts: %d images in %d groups, %d frames without a group tag, %d skipped (already in a hand-made group)",
             #records, count_groups(result.final_of), untagged, counts.skipped))
         local msg = string.format("Assisted Grouping: browsing %d images as %d bursts from their group tags.",

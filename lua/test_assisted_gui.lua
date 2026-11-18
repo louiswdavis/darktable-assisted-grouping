@@ -81,7 +81,7 @@ local prints, jobs, images_by_id, tags_by_name, panel = {}, {}, {}, {}, nil
 local prefs = { ["assisted_plugins/plugins_root"] = ROOT .. "/plugins" }
 local PREF_EMPTY = { string = "", directory = "", file = "", integer = 0, float = 0, bool = false }
 local group_error = nil -- set to make every darktable group change fail
-local group_writes = 0
+local group_writes, group_reads = 0, 0
 
 local dt = {
     configuration = { tmp_dir = ROOT .. "/tmp", config_dir = ROOT .. "/config", version = "test", running_os = WINDOWS and "windows" or "macos" },
@@ -154,6 +154,7 @@ local function image(id, filename, taken)
     local img = { id = id, filename = filename, path = "/photos", exif_datetime_taken = taken,
         exif_maker = "Sony", exif_model = "A1", exif_lens = "70-200", tags = {}, group = id }
     function img:get_group_members()
+        group_reads = group_reads + 1
         local members = {}
         for other_id = 1, #images_by_id do
             if images_by_id[other_id].group == self.group then members[#members + 1] = images_by_id[other_id] end
@@ -296,6 +297,22 @@ check("pairs, large group: says how many images the groups hold", printed(
 check("pairs, large group: every image is rewritten once", group_writes, 40)
 check("pairs, large group: reports them all", last_print(),
     "Assisted Grouping: reset 40 images to 0 RAW+JPEG pairs. Tags kept.")
+
+-- The same 40 frames as one burst: regrouping and clearing take the leader out last too.
+local burst = {}
+for _, id in ipairs(stack) do burst[#burst + 1] = images_by_id[id] end
+click("Group selection", burst)
+check("group, large burst: one darktable group", images_by_id[140].group, 101)
+check("group, large burst: the job bar reaches the end", jobs[1] and jobs[1].percent, 1.0)
+group_writes, group_reads = 0, 0
+click("Group selection", burst)
+check("regroup, large burst: 40 detached once each, 39 attached", group_writes, 79)
+check("regroup, large burst: the group is read from darktable once", group_reads, 1)
+group_writes = 0
+click("Clear grouping marks", burst)
+check("clear, large burst: every image is rewritten once", group_writes, 40)
+check("clear, large burst: the job bar moved", jobs[1] and jobs[1].percent, 0.8)
+check("clear, large burst: the frames are alone again", images_by_id[140].group, 140)
 
 -- Browse as bursts ------------------------------------------------------------------
 click("bursts", all)

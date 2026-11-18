@@ -25,6 +25,13 @@ ok   pairs: the job bar reaches the end
 ok   pairs, large group: says how many images the groups hold
 ok   pairs, large group: every image is rewritten once
 ok   pairs, large group: reports them all
+ok   group, large burst: one darktable group
+ok   group, large burst: the job bar reaches the end
+ok   regroup, large burst: 40 detached once each, 39 attached
+ok   regroup, large burst: the group is read from darktable once
+ok   clear, large burst: every image is rewritten once
+ok   clear, large burst: the job bar moved
+ok   clear, large burst: the frames are alone again
 ok   bursts: says it started
 ok   bursts: the job bar is closed
 ok   bursts: reports the bursts
