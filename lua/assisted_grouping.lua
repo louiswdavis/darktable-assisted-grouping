@@ -1428,6 +1428,8 @@ local function apply_tags(run, records, wanted, job, progress)
         end
     end
     log(string.format("tags: %d attached, %d detached", n_added, n_removed))
+    log(string.format("tags: timing: %.1fs in tag calls (database, undo, sidecar), %d pauses of %d ms",
+        w.call_s, w.sleeps, WRITE_SLEEP_MS))
     if w.failed > 0 then
         notify_error(string.format("Assisted Grouping: couldn't write tags on %d images: %s", w.failed, w.first_error))
     end
@@ -1510,6 +1512,7 @@ function M.apply_native_groups(units, final_of, ledger, progress)
         end
         if progress then progress(0.5 + 0.5 * g / #plan.groups) end
     end
+    log(string.format("native groups: timing: %.1fs in darktable calls, %d pauses of %d ms", w.call_s, w.sleeps, WRITE_SLEEP_MS))
     if w.failed > 0 then
         notify_error(string.format("Assisted Grouping: %d native group changes failed: %s", w.failed, w.first_error))
     end
@@ -1757,6 +1760,7 @@ function M.clear_marks(images)
         end
         log(string.format("clear: %d images, %d tags detached, %d taken out of native groups, %d frame groups restored, %d failed",
             #records, n_tags, n_ungrouped, n_restored, w.failed))
+        log(string.format("clear: timing: %.1fs in darktable calls, %d pauses of %d ms", w.call_s, w.sleeps, WRITE_SLEEP_MS))
         if w.failed > 0 then
             notify_error(string.format("Assisted Grouping: cleared grouping marks from %d images, but %d marks couldn't be cleared (%s). Clear again to retry.",
                 #records, w.failed, w.first_error))
@@ -1843,6 +1847,7 @@ function M.reset_to_pairs(images)
         end
         log(string.format("pairs: %d images ungrouped, %d frame groups made, %d failed",
             #records, n_pairs, w.failed))
+        log(string.format("pairs: timing: %.1fs in darktable calls, %d pauses of %d ms", w.call_s, w.sleeps, WRITE_SLEEP_MS))
         if w.failed > 0 then
             notify_error(string.format("Assisted Grouping: reset %d images to %d RAW+JPEG pairs, but %d group changes failed (%s). Reset again to retry. Tags kept.",
                 #records, n_pairs, w.failed, w.first_error))
