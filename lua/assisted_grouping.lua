@@ -1273,6 +1273,16 @@ local function stop_job(job)
     end_job(job)
 end
 
+-- Puts `what` on darktable's job list and says it has started, before the action's first read of
+-- the selection, so a click on a large selection shows at once. Only a job that checks
+-- M.cancel_requested is `cancellable`; the others get no cancel button.
+local function start_job(what, n, cancellable)
+    local job = dt.gui.create_job("Assisted Grouping: " .. what, true, cancellable and stop_job or nil)
+    job.percent = 0.0
+    say(string.format("Assisted Grouping: %s started on %s…", what, n == 1 and "1 image" or n .. " images"))
+    return job
+end
+
 -- While a job runs, remembers `run` to start when it finishes and returns true. Returns
 -- false (do nothing) when nothing is running or there is nothing to queue (`has_input`
 -- false), so the caller's normal checks print their own message.
@@ -1517,8 +1527,7 @@ function M.group_images(images, opts)
 
     local job, run = nil, { ledger = nil, applying = false }
     local okr, err = pcall(function()
-        job = dt.gui.create_job("Assisted Grouping", true, stop_job)
-        job.percent = 0.0
+        job = start_job("Group selection", #images, true)
         local records = M.build_images(images, M.needs_tags(opts))
         local units = M.collapse(records)
         local layer_opts = { gap = opts.gap, timing = opts.timing, camera = opts.camera, tag = opts.tag,
@@ -1629,8 +1638,9 @@ function M.clear_marks(images)
     end
     busy = true
     start_log("clear", #images)
-    local ledger, changed = nil, false
+    local job, ledger, changed = nil, nil, false
     local okr, err = pcall(function()
+        job = start_job("Clear grouping marks", #images)
         ledger = read_ledger()
         local records, members_of = {}, {}
         for _, img in ipairs(images) do
@@ -1699,12 +1709,15 @@ function M.clear_marks(images)
         log(string.format("clear: %d images, %d tags detached, %d taken out of native groups, %d frame groups restored, %d w.failed",
             #records, n_tags, n_ungrouped, n_restored, w.failed))
         if w.failed > 0 then
-            notify_error(string.format("Assisted Grouping: couldn't clear %d marks: %s", w.failed, w.first_error))
+            notify_error(string.format("Assisted Grouping: cleared grouping marks from %d images, but %d marks couldn't be cleared (%s). Clear again to retry.",
+                #records, w.failed, w.first_error))
+        else
+            say(string.format("Assisted Grouping: cleared grouping marks from %d images.", #records))
         end
-        say(string.format("Assisted Grouping: cleared grouping marks from %d images.", #records))
     end)
 
     if changed then write_ledger(ledger) end
+    end_job(job)
     busy = false
     if not okr then notify_error("Assisted Grouping: clearing marks failed. " .. tostring(err)) end
     flush_log()
@@ -1725,8 +1738,9 @@ function M.reset_to_pairs(images)
         return
     end
     busy = true
-    local ledger, changed = nil, false
+    local job, ledger, changed = nil, nil, false
     local okr, err = pcall(function()
+        job = start_job("Reset to RAW+JPEG pairs", #images)
         local records, img_of = {}, {}
         local function add(img)
             local id = tonumber(img.id)
@@ -1773,12 +1787,15 @@ function M.reset_to_pairs(images)
         log(string.format("pairs: %d images ungrouped, %d frame groups made, %d w.failed",
             #records, n_pairs, w.failed))
         if w.failed > 0 then
-            notify_error(string.format("Assisted Grouping: couldn't reset %d images: %s", w.failed, w.first_error))
+            notify_error(string.format("Assisted Grouping: reset %d images to %d RAW+JPEG pairs, but %d group changes failed (%s). Reset again to retry. Tags kept.",
+                #records, n_pairs, w.failed, w.first_error))
+        else
+            say(string.format("Assisted Grouping: reset %d images to %d RAW+JPEG pairs. Tags kept.", #records, n_pairs))
         end
-        say(string.format("Assisted Grouping: reset %d images to %d RAW+JPEG pairs. Tags kept.", #records, n_pairs))
     end)
 
     if changed then write_ledger(ledger) end
+    end_job(job)
     busy = false
     if not okr then notify_error("Assisted Grouping: reset to pairs failed. " .. tostring(err)) end
     flush_log()
@@ -1798,8 +1815,9 @@ function M.browse_bursts(images)
         return
     end
     busy = true
-    local ledger, changed = nil, false
+    local job, ledger, changed = nil, nil, false
     local okr, err = pcall(function()
+        job = start_job("Browse as bursts", #images)
         local records = M.build_images(images, true)
         local units = M.collapse(records)
         local base_of = M.base_of_from_tags(units)
@@ -1825,6 +1843,7 @@ function M.browse_bursts(images)
     end)
 
     if changed then write_ledger(ledger) end
+    end_job(job)
     busy = false
     if not okr then notify_error("Assisted Grouping: browse as bursts failed. " .. tostring(err)) end
     flush_log()
