@@ -1,0 +1,44 @@
+ok   the panel is installed at startup
+ok   startup has no Lua error
+ok   group, nothing selected: asks for a selection
+ok   group, nothing selected: no job bar
+ok   group: says it started as soon as it is clicked
+ok   group: one job bar, named
+ok   group: the job bar is closed
+ok   group: exif_times.py is asked for one file per frame
+ok   group: the end toast leads with the outcome
+ok   group: the burst and the RAW share a darktable group
+ok   group: the later frame stays alone
+ok   group, tags off: no tag is written
+ok   group: no Lua error
+ok   group, helper failed: still groups, on whole seconds
+ok   group with tags: every image gets one group tag
+ok   group with tags: the burst shares its tag
+ok   group with tags: the later frame has its own
+ok   pairs: says it started
+ok   pairs: the job bar is closed
+ok   pairs: reports the images in the selection's groups
+ok   pairs: the RAW is stacked with its JPEG
+ok   pairs: the next frame is out of the group
+ok   pairs: tags stay
+ok   bursts: says it started
+ok   bursts: the job bar is closed
+ok   bursts: reports the bursts
+ok   bursts: the burst is back in one group
+ok   bursts: exif_times.py isn't started
+ok   bursts, no group tags: says what to do
+ok   pairs, darktable refuses: one toast with the count and the cause
+ok   pairs, darktable refuses: the job bar is closed
+ok   clear, darktable refuses: one toast with the count and the cause
+ok   clear, darktable refuses: the tags it could detach are gone
+ok   clear: says it started
+ok   clear: the job bar is closed
+ok   clear retry: reports the images cleared
+ok   clear: the burst is split
+ok   clear: the RAW is stacked with its JPEG again
+ok   clear, nothing left: says so
+ok   clear, nothing left: the job bar is closed
+ok   the whole session has no Lua error
+ok   print_hinter is never called
+
+all passed (0 failed)
