@@ -115,18 +115,22 @@ def run_tests():
             else:
                 sys.modules["exifread"] = saved
 
-        real_pillow = P._read_pillow
-        P._read_pillow = lambda path: ("2026:11:07 14:11:44", None)
+        date_only = os.path.join(tmp, "dateonly.jpg")
+        write_jpeg(date_only, {DATE_TIME_ORIGINAL: "2026:11:07 14:11:44"})
+        check("Pillow has date, exifread finds nothing: Pillow's date kept", P.read_subsec_fields(date_only),
+              {"DateTimeOriginal": "2026:11:07 14:11:44", "SubSecTimeOriginal": None,
+               "SubSecDateTimeOriginal": None})
+
+        # Pillow and exifread read the same EXIF in any one file, so Pillow's open is pointed at the
+        # date-only JPEG while exifread reads the synthetic ARW; the real _read_pillow still runs.
+        real_open = P.Image.open
+        P.Image.open = lambda path: real_open(date_only)
         try:
             check("Pillow has date but no SubSec: exifread fills SubSec", P.read_subsec_fields(raw),
                   {"DateTimeOriginal": "2026:11:07 14:11:44", "SubSecTimeOriginal": "897",
                    "SubSecDateTimeOriginal": "2026:11:07 14:11:44.897"})
-            check("Pillow has date, exifread finds nothing: Pillow's date kept",
-                  P.read_subsec_fields(not_image),
-                  {"DateTimeOriginal": "2026:11:07 14:11:44", "SubSecTimeOriginal": None,
-                   "SubSecDateTimeOriginal": None})
         finally:
-            P._read_pillow = real_pillow
+            P.Image.open = real_open
 
         import exifread
         real_process = exifread.process_file

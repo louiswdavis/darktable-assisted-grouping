@@ -73,6 +73,8 @@ ok   all on: final_of is parent_of
 ok   all on: every layer ran
 ok   layers never merge across bursts
 ok   all on: every unit has a final group
+ok   camera on: each body's bursts are found on its own timeline
+ok   camera off: one timeline chains all five frames
 ok   base_of keeps its groups
 ok   unit outside base_of is numbered after the base groups
 ok   group_tag pads the final group number
@@ -213,7 +215,12 @@ ok   apply_subsec: RAW not sent borrows its JPEG's fraction (CRLF results)
 ok   apply_subsec: whole precision leaves epochs
 ok   apply_subsec: whole precision says why
 ok   apply_subsec: nothing timed
+ok   apply_subsec Camera on: body with fractions keeps them, the other stays whole
+ok   apply_subsec Camera off: one timeline, whole when any frame lacks a fraction
+ok   manifest_rows: Camera on adds the camera_key column
+ok   manifest_rows: Camera off keeps two columns
 ok   parse_helper_results: rows and precision
+ok   parse_helper_results: per-camera precision rows
 ok   count_tagged: frames with the tag
 ok   count_tagged: a spelling with spaces matches nothing
 ok   plan_tag_changes: detaches own tag, keeps hand-made, attaches new
@@ -223,6 +230,7 @@ ok   set_ledger_tags: entry with a native leader kept
 ok   set_ledger_native: cleared entry dropped
 ok   run_stamp: same second steps forward
 ok   run_stamp: later time used as is
+ok   run_stamp: written in UTC
 ok   pythonw_of: venv python.exe
 ok   pythonw_of: case-insensitive
 ok   pythonw_of: bare python on PATH
