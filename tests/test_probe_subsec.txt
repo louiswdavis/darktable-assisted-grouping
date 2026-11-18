@@ -17,5 +17,5 @@ ok   format_line: blanks where absent
 all tests passed
 
 --- stderr ---
-23:02:15 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpz11nxqzq/raw.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpz11nxqzq/raw.arw'; exifread: not installed)
-23:02:15 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpz11nxqzq/raw.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpz11nxqzq/raw.arw'; exifread: RuntimeError: corrupt RAW)
+23:30:30 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmp4ka9iz71/raw.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmp4ka9iz71/raw.arw'; exifread: not installed)
+23:30:30 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmp4ka9iz71/raw.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmp4ka9iz71/raw.arw'; exifread: RuntimeError: corrupt RAW)

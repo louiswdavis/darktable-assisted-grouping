@@ -30,7 +30,7 @@ ok   CLI exit code
 ok   CLI with cameras: one precision row per camera, sorted, before the overall line
 
 --- stderr ---
-23:02:15 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpu_m4_loz/missing.jpg: couldn't read the capture time (Pillow: FileNotFoundError: [Errno 2] No such file or directory: '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpu_m4_loz/missing.jpg'; exifread: FileNotFoundError: [Errno 2] No such file or directory: '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpu_m4_loz/missing.jpg')
+23:30:30 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpacnns9p3/missing.jpg: couldn't read the capture time (Pillow: FileNotFoundError: [Errno 2] No such file or directory: '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpacnns9p3/missing.jpg'; exifread: FileNotFoundError: [Errno 2] No such file or directory: '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpacnns9p3/missing.jpg')
 /Users/louis.davis/Documents/codebases/darktable/darktable-assisted-culling/.venv/lib/python3.14/site-packages/PIL/TiffImagePlugin.py:982: UserWarning: Corrupt EXIF data.  Expecting to read 2 bytes but only got 0. 
   warnings.warn(str(msg))
-23:02:15 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpu_m4_loz/junk.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpu_m4_loz/junk.arw')
+23:30:30 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpacnns9p3/junk.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpacnns9p3/junk.arw')
