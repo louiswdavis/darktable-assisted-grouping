@@ -569,6 +569,43 @@ local mixed = { [5] = { raw, jpg }, [6] = { jpg, rec(9, "z.cr2") }, [7] = { r7 }
 check("plan_native skips the whole frame when one of its images is in a hand-made group",
     plan_str(A.plan_native(pair_units, { [5] = 1, [7] = 1 }, {}, mixed)), "detach ; groups ; skipped 2")
 
+do
+-- run 1 grouped 1,2 (leader 1) and 3,4 (leader 3); then 2 was moved into 3's group by hand
+local moved_ledger = { [1] = { tags = {}, native = 1 }, [2] = { tags = {}, native = 1 },
+    [3] = { tags = {}, native = 3 }, [4] = { tags = {}, native = 3 } }
+local target = { r2, r3, r4 }
+target.leader = 3
+local moved = { [1] = { r1 }, [2] = target, [3] = target, [4] = target }
+check("plan_native keeps an image moved by hand into another plugin group, and that group",
+    plan_str(A.plan_native(units, { [1] = 1, [2] = 1, [3] = 1, [4] = 1 }, moved_ledger, moved)),
+    "detach 1; groups ; skipped 3")
+end
+
+-- plan_merge ---------------------------------------------------------------------
+do
+local function group(leader, ids)
+    local out = { leader = leader }
+    for _, id in ipairs(ids) do out[#out + 1] = { id = id } end
+    return out
+end
+local g1, g5 = group(1, { 1, 2 }), group(5, { 5, 6, 3 })
+local mplan = A.plan_merge({ g5, g1, g5 })
+check("plan_merge joins every image of the selection's groups to the lowest id's group",
+    mplan.target .. "; join " .. table.concat(mplan.join, ",") .. "; groups " .. mplan.groups .. "; images " .. #mplan.ids,
+    "1; join 3,5,6; groups 2; images 5")
+check("plan_merge: one group has nothing to merge", A.plan_merge({ g1, g1 }).groups, 1)
+end
+
+-- repoint_stale_leaders ------------------------------------------------------------
+do
+local sl = { [2] = { tags = {}, native = 1 }, [3] = { tags = {}, native = 1 },
+    [5] = { tags = { x = true }, native = 4 }, [7] = { tags = {}, native = 7 }, [8] = { tags = {}, native = 7 } }
+local n = A.repoint_stale_leaders(sl, function(id) return id ~= 1 and id ~= 4 end)
+check("repoint_stale_leaders points a group at its lowest surviving id and frees a lone survivor",
+    string.format("%d; %s %s %s %s %s", n, sl[2].native, sl[3].native, tostring(sl[5].native), sl[7].native, sl[8].native),
+    "2; 2 2 nil 7 7")
+end
+
 -- run_layers with timing off ----------------------------------------------------
 local untimed_off = A.run_layers(run_units, { gap = 2, timing = false })
 check("timing off: every unit, timed or not, shares group 1", keys(untimed_off.burst_of) .. " / "

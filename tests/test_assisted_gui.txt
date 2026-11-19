@@ -45,6 +45,14 @@ ok   pairs: the RAW is stacked with its JPEG
 ok   pairs: the next frame is out of the group
 ok   pairs: tags stay
 ok   pairs: the job bar reaches the end
+ok   merge, one group: nothing to merge
+ok   merge, one group: no job bar
+ok   merge: says it started
+ok   merge: the job bar is closed
+ok   merge: the later frame joins the burst
+ok   merge: reports it
+ok   merge: the ledger no longer counts the group as the plugin's
+ok   merge, then Group selection: the merged group stays
 ok   pairs, large group: says how many images the groups hold
 ok   pairs, large group: every image is rewritten once
 ok   pairs, large group: reports them all
@@ -58,6 +66,12 @@ ok   regroup, one frame more: one darktable group
 ok   clear, large burst: every image is rewritten once
 ok   clear, large burst: the job bar moved
 ok   clear, large burst: the frames are alone again
+ok   clear, large burst: the log has the timing line
+ok   clear, cancelled: says how far it got
+ok   clear, cancelled: the first frame is alone, the ones not reached stay grouped
+ok   clear, cancelled: the job bar is closed
+ok   clear, after a cancel: the next clear finishes the rest
+ok   clear, after a cancel: the frames are alone again
 ok   bursts: says it started
 ok   bursts: the job bar is closed
 ok   bursts: reports the bursts

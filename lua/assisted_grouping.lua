@@ -733,6 +733,30 @@ end
 
 M.ledger_prune = C.ledger_prune
 
+-- Run after ledger_prune: entries whose native leader is no longer in the library
+-- (`exists(id)` false) point at the lowest surviving id of that group instead, and a
+-- lone survivor's native is cleared. Returns the number of groups changed.
+function M.repoint_stale_leaders(ledger, exists)
+    local by_leader = {}
+    for id, entry in pairs(ledger) do
+        if type(id) == "number" and entry.native and entry.native ~= id then
+            by_leader[entry.native] = by_leader[entry.native] or {}
+            table.insert(by_leader[entry.native], id)
+        end
+    end
+    local n = 0
+    for leader, ids in pairs(by_leader) do
+        if not ledger[leader] and not exists(leader) then
+            table.sort(ids)
+            for _, id in ipairs(ids) do
+                M.set_ledger_native(ledger, id, #ids >= 2 and ids[1] or nil)
+            end
+            n = n + 1
+        end
+    end
+    return n
+end
+
 -- Only ledger tags are ever removed, so hand-made tags survive a re-run.
 -- Both lists are sorted.
 function M.plan_replace(have, ledger_tags, wanted)
@@ -750,8 +774,9 @@ end
 
 -- Plans the native groups for `final_of`. `members_of[id]` lists each selected
 -- image's current native group as `{ id, dir, filename }` records, itself included.
--- A frame is skipped when one of its images sits in a group holding another frame's
--- image and is not in the ledger as `native`: that group was made by hand. Every
+-- A frame is skipped when one of its images shares a group with another frame's image
+-- that is not of its ledger group: that group was made, merged or moved into by hand,
+-- and the frames on both sides of a move keep it. Every
 -- image of a kept frame in a final group of 2+ images is detached, then the group's
 -- lowest id leads. Selected ledger images of smaller groups are detached too, so
 -- the plugin's old groups dissolve on a re-run. A final group that is already one
@@ -772,10 +797,11 @@ function M.plan_native(units, final_of, ledger, members_of)
     local function hand_made(unit)
         local own = frame_key(unit.members[1])
         for _, m in ipairs(unit.members) do
-            if not (ledger[m.id] and ledger[m.id].native) then
-                for _, other in ipairs(members_of[m.id] or {}) do
-                    if frame_key(other) ~= own then return true end
-                end
+            local leader = ledger[m.id] and ledger[m.id].native
+            for _, other in ipairs(members_of[m.id] or {}) do
+                local oid = tonumber(other.id)
+                local ledger_mate = leader and (oid == leader or (ledger[oid] and ledger[oid].native == leader))
+                if frame_key(other) ~= own and not ledger_mate then return true end
             end
         end
         return false
@@ -1076,6 +1102,32 @@ function M.plan_pairs(records)
     end
     table.sort(groups, function(a, b) return a.leader < b.leader end)
     return groups
+end
+
+-- Merge groups: `groups` are the selected images' native groups as member lists
+-- ({ id }, with `leader`), repeats allowed. Every image joins the group of the lowest id.
+-- Returns { target = lowest id, join = sorted ids outside the target's group,
+-- ids = all sorted ids, groups = n distinct groups }.
+function M.plan_merge(groups)
+    local seen_group, seen, ids, n = {}, {}, {}, 0
+    for _, g in ipairs(groups) do
+        if not seen_group[g.leader] then
+            seen_group[g.leader] = true
+            n = n + 1
+            for _, m in ipairs(g) do
+                if not seen[m.id] then
+                    seen[m.id] = g.leader
+                    ids[#ids + 1] = m.id
+                end
+            end
+        end
+    end
+    table.sort(ids)
+    local target_group, join = seen[ids[1]], {}
+    for _, id in ipairs(ids) do
+        if seen[id] ~= target_group then join[#join + 1] = id end
+    end
+    return { target = ids[1], join = join, ids = ids, groups = n }
 end
 
 -- Pure helpers ------------------------------------------------------------------
@@ -1575,11 +1627,17 @@ local function image_exists(id)
 end
 
 -- Writes the ledger of the tags and native groups this plugin made, first dropping the
--- rows of images no longer in the library. A failed write is tried once more.
+-- rows of images no longer in the library and re-pointing groups whose leader is gone.
+-- A failed write is tried once more.
 local function write_ledger(ledger)
     local pruned, skipped = M.ledger_prune(ledger, image_exists)
     if pruned > 0 then log(string.format("ledger: dropped %d images no longer in the library", pruned)) end
-    if skipped then log("ledger: prune skipped, no image id resolved") end
+    if skipped then
+        log("ledger: prune skipped, no image id resolved")
+    else
+        local repointed = M.repoint_stale_leaders(ledger, image_exists)
+        if repointed > 0 then log(string.format("ledger: %d groups had a leader no longer in the library; re-pointed to their lowest id", repointed)) end
+    end
     make_dir(LEDGER_DIR)
     local text = M.ledger_format(ledger, LIB_KEY)
     local ok_w, err = M.write_file_atomic(LEDGER_PATH, text)
@@ -2185,6 +2243,62 @@ function M.browse_bursts(images)
     run_next()
 end
 
+-- Merge groups: joins the darktable groups of the selected images into one. The merged
+-- images leave the ledger's native groups (tags stay), so the merge counts as made by
+-- hand: Group selection keeps it and Clear leaves it.
+function M.merge_groups(images)
+    if busy then
+        dt.print("Assisted Grouping: another job is still running. Wait for it to finish, or cancel it first.")
+        return
+    end
+    if not images or #images == 0 then
+        dt.print("Assisted Grouping: select some images first")
+        return
+    end
+    busy = true
+    local job, ledger, changed = nil, nil, false
+    local okr, err = C.logged_call(log, "merge groups", function()
+        local groups, img_of, group_cache = {}, {}, {}
+        for _, img in ipairs(images) do
+            local members = group_members(img, group_cache)
+            groups[#groups + 1] = members
+            for _, member in ipairs(members) do img_of[member.id] = member.img end
+        end
+        local plan = M.plan_merge(groups)
+        if plan.groups < 2 then
+            say("Assisted Grouping: nothing to merge. Select images from two or more groups.")
+            return
+        end
+        job = start_job("Merge groups", #plan.join)
+        start_log("merge", #plan.ids)
+        flush_log()
+        ledger = read_ledger()
+        changed = true
+
+        local w = C.paced_writer(dt, WRITE_BUDGET, WRITE_SLEEP_MS, log)
+        local target = img_of[plan.target]
+        for i, id in ipairs(leaders_last(plan.join, img_of)) do
+            w.write(function() img_of[id]:group_with(target) end, 1, string.format("image %d (%s): group with image %d", id, img_of[id].filename, plan.target))
+            job.percent = i / #plan.join
+        end
+        for _, id in ipairs(plan.ids) do
+            if ledger[id] and ledger[id].native then M.set_ledger_native(ledger, id, nil) end
+        end
+        log(string.format("merge: %d groups, %d images, %d moved, %d failed", plan.groups, #plan.ids, #plan.join, w.failed))
+        if w.failed > 0 then
+            notify_error(string.format("Assisted Grouping: merged %d groups, but %d moves failed (%s). Merge again to retry.",
+                plan.groups, w.failed, w.first_error))
+        else
+            say(string.format("Assisted Grouping: merged %d groups into one of %d images. Group selection keeps it.", plan.groups, #plan.ids))
+        end
+    end)
+
+    finish_job(job, changed and ledger or nil)
+    if not okr then notify_error("Assisted Grouping: merge groups failed. " .. tostring(err)) end
+    flush_log()
+    run_next()
+end
+
 local preset_file_store, make_preset_controls = C.preset_file_store, C.make_preset_controls
 
 
@@ -2407,6 +2521,15 @@ local function install_panel()
             M.reset_to_pairs(images)
         end,
     }
+    local merge_button = new_widget("button") {
+        label = "Merge groups",
+        tooltip = "Join the darktable groups of the selected photos into one, for a burst the run split. The merged group counts as made by hand: Group selection keeps it and Clear leaves it. Tags stay. pairs takes it apart again.",
+        clicked_callback = function()
+            local images = copy_images(dt.gui.action_images)
+            if queue_if_busy("Merge groups", #images > 0, function() M.merge_groups(images) end) then return end
+            M.merge_groups(images)
+        end,
+    }
 
     local store = preset_file_store(LEDGER_DIR .. "/presets")
     local raw_read = store.read
@@ -2470,6 +2593,8 @@ local function install_panel()
                 bursts_button,
                 pairs_button,
             },
+            new_widget("section_label") { label = "fix by hand (kept on the next run)" },
+            merge_button,
         },
         {
             new_widget("section_label") { label = "undo" },

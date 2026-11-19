@@ -392,6 +392,23 @@ check("pairs: the next frame is out of the group", jpeg2.group ~= jpeg1.group, t
 check("pairs: tags stay", group_tag_count(jpeg2), 1)
 check("pairs: the job bar reaches the end", jobs[1] and jobs[1].percent, 1.0)
 
+-- Merge groups -------------------------------------------------------------------------
+click("Group selection", all)
+click("Merge groups", { jpeg1 })
+check("merge, one group: nothing to merge", last_print(),
+    "Assisted Grouping: nothing to merge. Select images from two or more groups.")
+check("merge, one group: no job bar", #jobs, 0)
+click("Merge groups", { jpeg2, jpeg3 })
+check("merge: says it started", prints[1], "Assisted Grouping: Merge groups started on 1 image…")
+check("merge: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
+check("merge: the later frame joins the burst", jpeg3.group == jpeg1.group and raw1.group == jpeg1.group, true)
+check("merge: reports it", last_print(),
+    "Assisted Grouping: merged 2 groups into one of 4 images. Group selection keeps it.")
+check("merge: the ledger no longer counts the group as the plugin's", ledger_text():find(",group,", 1, true), nil)
+click("Group selection", all)
+check("merge, then Group selection: the merged group stays", jpeg3.group == jpeg1.group and jpeg2.group == jpeg1.group, true)
+click("pairs", { jpeg1 })
+
 -- A large hand-made group: selecting one frame resets all of it, leader last.
 local stack = {}
 for id = 101, 140 do stack[#stack + 1] = id end
