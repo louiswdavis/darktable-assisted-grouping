@@ -150,7 +150,10 @@ ok   plan_native takes a RAW+JPEG pair darktable grouped on import into the burs
 ok   plan_native groups a pair that is its own final group
 ok   plan_native treats an unselected JPEG in the RAW's group as the same frame
 ok   plan_native skips the whole frame when one of its images is in a hand-made group
-ok   plan_native keeps an image moved by hand into another plugin group, and that group
+ok   plan_native keeps an image moved by hand into another plugin group, that group, and the image left behind
+ok   plan_native keeps an image taken out of a plugin group by hand alone
+ok   plan_native keeps a leader taken out of a plugin group by hand alone
+ok   plan_native leaves a two-image plugin group split by hand apart
 ok   plan_merge joins every image of the selection's groups to the lowest id's group
 ok   plan_merge: one group has nothing to merge
 ok   repoint_stale_leaders points a group at its lowest surviving id and frees a lone survivor
@@ -234,6 +237,7 @@ ok   plan_clear: records without filenames get no restore group
 ok   plan_clear: two cleared RAW+JPEG pairs -> two restore groups under their lowest ids
 ok   plan_clear: a lone image gets no restore group
 ok   plan_clear: hand-made cross-frame group is left alone
+ok   plan_partners: unselected same-frame images the ledger lists, each once; selected, unledgered and other frames left
 ok   plan_pairs: one group per frame under its lowest id, stem case ignored, repeats once
 ok   plan_pairs: no records, no groups
 ok   subsec_fractions: RAW with a blank row borrows its JPEG's fraction
@@ -336,6 +340,15 @@ ok   preset name colon
 ok   preset name quote
 ok   preset order
 ok   preset order empty
+ok   bundle manifest round trip name
+ok   bundle manifest round trip files
+ok   bundle from another plugin
+ok   bundle newer version refused
+ok   bundle not a manifest
+ok   bundle bad json
+ok   free name unused
+ok   free name taken any case
+ok   free name template
 ok   preset schema: defaults
 ok   preset schema: min_burst_size and session_gap_minutes survive a save and load
 ok   preset schema: a preset without min_burst_size loads as 2

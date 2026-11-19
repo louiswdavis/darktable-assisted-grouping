@@ -2605,6 +2605,7 @@ local function install_panel()
 
     ctl = make_preset_controls({
         prefix = "Assisted Grouping",
+        plugin = "assisted_grouping",
         schema = M.PRESET_SCHEMA,
         store = store,
         read_panel = read_panel,

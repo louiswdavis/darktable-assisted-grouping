@@ -519,6 +519,66 @@ check("clear, JPEGs only: the ledger forgets the RAW", ledger_text():find('"' ..
 click("Clear grouping marks", all)
 check("clear, nothing left: says so", last_print(), "Assisted Grouping: nothing to clear; the selection has no grouping marks.")
 check("clear, nothing left: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
+
+-- Export and import presets -------------------------------------------------------------
+local function widget_where(widget, kind, field, value)
+    if type(widget) ~= "table" then return nil end
+    if widget.kind == kind and widget[field] == value then return widget end
+    for _, child in ipairs(widget) do
+        local found = widget_where(child, kind, field, value)
+        if found then return found end
+    end
+    return nil
+end
+
+-- Picks a menu entry by its text, as a click in darktable does.
+local function choose(combo, text)
+    for i = 1, #combo do
+        if combo[i] == text then
+            combo.selected, combo.value = i, text
+            combo.changed_callback(combo)
+            return true
+        end
+    end
+    return false
+end
+
+local actions = widget_where(panel, "combobox", "label", "actions")
+prints = {}
+choose(actions, "store new preset…")
+entry(panel, "preset name").text = "Rally"
+button(panel, "OK").clicked_callback()
+check("presets: Rally is stored", read_file(ROOT .. "/config/assisted_grouping/presets/Rally.json") ~= nil, true)
+local out = ROOT .. "/export"
+make_dir(out)
+check("presets: export is offered for a saved preset", choose(actions, "export preset…"), true)
+widget_where(panel, "file_chooser_button", "title", "folder to export the preset into").value = out
+prints = {}
+button(panel, "Export").clicked_callback()
+check("presets: export toast", last_print(), "Assisted Grouping: preset \"Rally\" exported to " .. out .. "/Rally.atpreset")
+local saved = read_file(ROOT .. "/config/assisted_grouping/presets/Rally.json")
+check("presets: the bundle's preset.json is the saved preset", read_file(out .. "/Rally.atpreset/preset.json") == saved and saved ~= nil, true)
+check("presets: the manifest names the plugin and files",
+    (read_file(out .. "/Rally.atpreset/manifest.json") or ""):find('"plugin": "assisted_grouping"', 1, true) ~= nil
+    and (read_file(out .. "/Rally.atpreset/manifest.json") or ""):find('"files": "preset.json"', 1, true) ~= nil, true)
+prints = {}
+button(panel, "Export").clicked_callback()
+check("presets: a second export into the same folder is refused", last_print():find("already exists", 1, true) ~= nil, true)
+
+check("presets: import is offered", choose(actions, "import preset…"), true)
+widget_where(panel, "file_chooser_button", "title", "preset bundle (.atpreset folder)").value = out .. "/Rally.atpreset"
+prints = {}
+button(panel, "Import").clicked_callback()
+check("presets: import keeps the existing Rally and adds Rally (2)", last_print(),
+    "Assisted Grouping: imported \"Rally (2)\" from " .. out .. "/Rally.atpreset (\"Rally\" was taken); pick it in the preset list")
+check("presets: Rally (2) holds the bundle's settings", read_file(ROOT .. "/config/assisted_grouping/presets/Rally (2).json"), saved)
+check("presets: Rally (2) is in the preset list", choose(widget_where(panel, "combobox", "label", "preset"), "Rally (2)"), true)
+
+write_file(out .. "/Rally.atpreset/manifest.json",
+    '{"version": 1, "plugin": "assisted_culling", "preset": "Rally", "files": "preset.json"}')
+prints = {}
+button(panel, "Import").clicked_callback()
+check("presets: a culling bundle is refused", last_print(), "Assisted Grouping: the bundle is for assisted_culling, not this plugin")
 check("the whole session has no Lua error", lua_errors(), nil)
 check("print_hinter is never called", printed("print_hinter"), false)
 

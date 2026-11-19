@@ -89,8 +89,23 @@ ok   clear: the job bar is closed
 ok   clear retry: reports the images cleared
 ok   clear: the burst is split
 ok   clear: the RAW is stacked with its JPEG again
+ok   clear, JPEGs only: the toast counts the unselected RAW
+ok   clear, JPEGs only: the RAW's group tag is gone too
+ok   clear, JPEGs only: the RAW is stacked with its JPEG again
+ok   clear, JPEGs only: the ledger forgets the RAW
 ok   clear, nothing left: says so
 ok   clear, nothing left: the job bar is closed
+ok   presets: Rally is stored
+ok   presets: export is offered for a saved preset
+ok   presets: export toast
+ok   presets: the bundle's preset.json is the saved preset
+ok   presets: the manifest names the plugin and files
+ok   presets: a second export into the same folder is refused
+ok   presets: import is offered
+ok   presets: import keeps the existing Rally and adds Rally (2)
+ok   presets: Rally (2) holds the bundle's settings
+ok   presets: Rally (2) is in the preset list
+ok   presets: a culling bundle is refused
 ok   the whole session has no Lua error
 ok   print_hinter is never called
 
