@@ -70,8 +70,18 @@ ok   clear, large burst: the log has the timing line
 ok   clear, cancelled: says how far it got
 ok   clear, cancelled: the first frame is alone, the ones not reached stay grouped
 ok   clear, cancelled: the job bar is closed
+ok   To check sits above the warning lines, outside the folding pages
+ok   To check: the cancelled clear shows in the box
+ok   To check: the row names the action and the count
+ok   To check: the item is saved for a restart
+ok   To check: Select selects the photos not reached
 ok   clear, after a cancel: the next clear finishes the rest
 ok   clear, after a cancel: the frames are alone again
+ok   To check: the next clear replaces its items
+ok   To check: nothing left, the box hides
+ok   To check: a second cancelled clear fills the box again
+ok   To check: Clear empties the box
+ok   To check: Clear empties the saved list
 ok   bursts: says it started
 ok   bursts: the job bar is closed
 ok   bursts: reports the bursts

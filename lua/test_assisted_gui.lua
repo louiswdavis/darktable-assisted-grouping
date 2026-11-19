@@ -464,10 +464,36 @@ check("clear, cancelled: says how far it got", last_print(),
 check("clear, cancelled: the first frame is alone, the ones not reached stay grouped",
     images_by_id[102].group .. " " .. images_by_id[103].group .. " " .. images_by_id[140].group, "102 101 101")
 check("clear, cancelled: the job bar is closed", jobs[1].valid, false)
+
+-- To check: the photos the cancelled clear didn't reach
+local to_check = panel[#panel - 2]
+check("To check sits above the warning lines, outside the folding pages",
+    type(to_check) == "table" and to_check[1] and to_check[1][1] and to_check[1][1].label, "To check")
+to_check = type(to_check) == "table" and to_check[1] and to_check[1][1] and to_check[1][1].label == "To check" and to_check or { {}, {} }
+local CHECKS_FILE = ROOT .. "/config/assisted_grouping.checks.txt"
+check("To check: the cancelled clear shows in the box", to_check.visible, true)
+check("To check: the row names the action and the count",
+    (to_check[2][1] or {}).label, "Clear: clear cancelled: 39 photos not reached keep their marks")
+check("To check: the item is saved for a restart",
+    (read_file(CHECKS_FILE) or ""):find("Clear\tclear cancelled: 39 photos not reached keep their marks\t", 1, true) ~= nil, true)
+selection_sets = 0
+;(button(to_check, "Select") or { clicked_callback = function() end }).clicked_callback()
+check("To check: Select selects the photos not reached", selection_sets .. " " .. #dt.gui.action_images, "1 39")
 group_writes = 0
 click("Clear grouping marks", burst)
 check("clear, after a cancel: the next clear finishes the rest", group_writes, 39)
 check("clear, after a cancel: the frames are alone again", images_by_id[102].group, 102)
+check("To check: the next clear replaces its items", (read_file(CHECKS_FILE) or ""):find("Clear\t", 1, true), nil)
+check("To check: nothing left, the box hides", to_check.visible, false)
+dt.control.sleep = function() jobs[1].valid = false end
+click("Group selection", burst)
+click("Clear grouping marks", burst)
+dt.control.sleep = function() end
+check("To check: a second cancelled clear fills the box again", to_check.visible, true)
+;(button(to_check, "Clear") or { clicked_callback = function() end }).clicked_callback()
+check("To check: Clear empties the box", to_check.visible, false)
+check("To check: Clear empties the saved list", read_file(CHECKS_FILE), "")
+click("Clear grouping marks", burst)
 
 -- Browse as bursts ------------------------------------------------------------------
 click("bursts", all)
