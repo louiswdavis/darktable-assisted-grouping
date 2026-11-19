@@ -776,7 +776,9 @@ end
 -- image's current native group as `{ id, dir, filename }` records, itself included.
 -- A frame is skipped when one of its images shares a group with another frame's image
 -- that is not of its ledger group: that group was made, merged or moved into by hand,
--- and the frames on both sides of a move keep it. Every
+-- and the frames on both sides of a move keep it. A frame is skipped too when one of
+-- its images is alone while the ledger still holds another image of its group: it was
+-- taken out by hand, or its group was broken up by hand. Every
 -- image of a kept frame in a final group of 2+ images is detached, then the group's
 -- lowest id leads. Selected ledger images of smaller groups are detached too, so
 -- the plugin's old groups dissolve on a re-run. A final group that is already one
@@ -794,11 +796,20 @@ function M.plan_native(units, final_of, ledger, members_of)
         table.insert(by_group[g], unit)
     end
 
+    local ledger_size = {}
+    for id, entry in pairs(ledger) do
+        if type(id) == "number" and entry.native then
+            ledger_size[entry.native] = (ledger_size[entry.native] or 0) + 1
+        end
+    end
+
     local function hand_made(unit)
         local own = frame_key(unit.members[1])
         for _, m in ipairs(unit.members) do
             local leader = ledger[m.id] and ledger[m.id].native
-            for _, other in ipairs(members_of[m.id] or {}) do
+            local now = members_of[m.id] or {}
+            if leader and #now == 1 and ledger_size[leader] >= 2 then return true end
+            for _, other in ipairs(now) do
                 local oid = tonumber(other.id)
                 local ledger_mate = leader and (oid == leader or (ledger[oid] and ledger[oid].native == leader))
                 if frame_key(other) ~= own and not ledger_mate then return true end

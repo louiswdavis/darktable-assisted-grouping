@@ -8,7 +8,7 @@ Competitor figures are vendor claims and have not been checked.
 
 ## Hand edits survive a re-run
 
-**Built 2026-11-19, awaiting a Windows run (README test step 19).** `plan_native` skips a frame sharing a group with another frame not of its ledger group, the **Merge groups** button, and `repoint_stale_leaders` in `write_ledger`. Not covered: an image taken out by hand to stand alone is grouped again.
+**Built 2026-11-19, awaiting a Windows run (README test step 19).** `plan_native` skips a frame sharing a group with another frame not of its ledger group, the **Merge groups** button, and `repoint_stale_leaders` in `write_ledger`. Also built 2026-11-19: an image taken out by hand to stand alone stays alone, since `plan_native` skips an image that is alone while the ledger holds another image of its group.
 
 Before, a re-run could regroup images the user moved by hand. Asked for:
 - images moved to another group by hand keep that group on the next run

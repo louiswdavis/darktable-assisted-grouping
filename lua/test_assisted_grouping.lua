@@ -576,9 +576,30 @@ local moved_ledger = { [1] = { tags = {}, native = 1 }, [2] = { tags = {}, nativ
 local target = { r2, r3, r4 }
 target.leader = 3
 local moved = { [1] = { r1 }, [2] = target, [3] = target, [4] = target }
-check("plan_native keeps an image moved by hand into another plugin group, and that group",
+check("plan_native keeps an image moved by hand into another plugin group, that group, and the image left behind",
     plan_str(A.plan_native(units, { [1] = 1, [2] = 1, [3] = 1, [4] = 1 }, moved_ledger, moved)),
-    "detach 1; groups ; skipped 3")
+    "detach ; groups ; skipped 4")
+end
+
+do
+-- run 1 grouped 1,2,3 (leader 1); then 2 was taken out by hand to stand alone
+local out_ledger = { [1] = { tags = {}, native = 1 }, [2] = { tags = {}, native = 1 }, [3] = { tags = {}, native = 1 } }
+local rest = { r1, r3 }
+rest.leader = 1
+local taken_out = { [1] = rest, [2] = { r2 }, [3] = rest, [4] = { r4 } }
+check("plan_native keeps an image taken out of a plugin group by hand alone",
+    plan_str(A.plan_native(units, final, out_ledger, taken_out)), "detach ; groups ; skipped 1")
+-- the leader taken out: darktable hands the group to the next image
+local rest_led_by_2 = { r2, r3 }
+rest_led_by_2.leader = 2
+check("plan_native keeps a leader taken out of a plugin group by hand alone",
+    plan_str(A.plan_native(units, final, out_ledger, { [1] = { r1 }, [2] = rest_led_by_2, [3] = rest_led_by_2, [4] = { r4 } })),
+    "detach ; groups ; skipped 1")
+local split = { [1] = { r1 }, [2] = { r2 }, [3] = { r3 }, [4] = { r4 } }
+local pair_ledger = { [1] = { tags = {}, native = 1 }, [2] = { tags = {}, native = 1 } }
+check("plan_native leaves a two-image plugin group split by hand apart",
+    plan_str(A.plan_native(units, { [1] = 1, [2] = 1, [3] = 2, [4] = 2 }, pair_ledger, split)),
+    "detach 3,4; groups 3:3,4; skipped 2")
 end
 
 -- plan_merge ---------------------------------------------------------------------
