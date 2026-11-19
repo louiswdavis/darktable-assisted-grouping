@@ -531,6 +531,9 @@ local function widget_where(widget, kind, field, value)
     return nil
 end
 
+check("the warning and notice lines sit at the foot of the panel, outside the folding pages",
+      panel[#panel - 1].kind .. "," .. panel[#panel].kind, "label,label")
+
 -- Picks a menu entry by its text, as a click in darktable does.
 local function choose(combo, text)
     for i = 1, #combo do

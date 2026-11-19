@@ -95,6 +95,7 @@ ok   clear, JPEGs only: the RAW is stacked with its JPEG again
 ok   clear, JPEGs only: the ledger forgets the RAW
 ok   clear, nothing left: says so
 ok   clear, nothing left: the job bar is closed
+ok   the warning and notice lines sit at the foot of the panel, outside the folding pages
 ok   presets: Rally is stored
 ok   presets: export is offered for a saved preset
 ok   presets: export toast
