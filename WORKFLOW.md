@@ -17,7 +17,7 @@ Culling before grouping gives a batch-wide star ranking and no keepers. The done
 | You re-ran | Then re-run | Why |
 |---|---|---|
 | Grouping | Tagging (if it used groups), Culling | both pick within groups |
-| Tagging | Culling (if **car tag node** is set) | keepers per car |
+| Tagging | Culling (if a **tag node** box holds the tagging prefix) | keepers per car |
 | Culling | nothing: nobody reads culling's output | none |
 
 Caches keep detections, OCR, embeddings and sharpness per frame, so a re-run is a decision-only pass: minutes, not the first-run hour.
@@ -27,10 +27,10 @@ Caches keep detections, OCR, embeddings and sharpness per frame, so a re-run is 
 **browse as pairs** in grouping and darktable's own grouping toggle both break native groups. Tags survive both, and **browse as bursts** restores the groups from the tags without Python. Three settings:
 
 - Grouping: **Group tags** on; save as your rally preset in the grouping panel.
-- Tagging collection: **grouping support** = Grouping tags, node blank (newest run).
-- Culling: **grouping support** = Grouping tags, node blank; **car tag node** = the collection prefix; save as your rally preset in the culling panel. The car tag node splits per car for number-only entries and per team for `team|name` entries, until ticket 15.
+- Tagging: **grouping support** = grouping tags, **grouping tag node** blank (each photo's latest run).
+- Culling: **Cull by native groups** off; **tag node 1** = `Assisted Grouping` (each photo's latest run); **tag node 2** = the tagging prefix; save as your rally preset in the culling panel. The prefix node splits per car for number-only entries and per team for `team|name` entries (see the culling README).
 
-Native groups stay the template default for other shoot types.
+Darktable groups stay the template default for other shoot types.
 
 ## Where each plugin writes
 
@@ -38,4 +38,4 @@ Native groups stay the template default for other shoot types.
 |---|---|---|
 | Grouping | darktable groups; `Assisted Grouping\|<stamp>\|Group\|NNNN` (+ Burst, Camera, Tag, Parent with **Layer trace tags**) when **Group tags** is on | any tag, via its **Tag** and **Parent tag** layers (e.g. tagging's `Rally\|2026` as the parent node) |
 | Tagging | `<prefix>\|<number>` entry tags, `Assisted Tagging\|Colour\|<name>`, `Assisted Tagging\|Identification\|…` diagnostics | groups: native darktable groups (default) or `Assisted Grouping\|<stamp>\|Group` tags, for burst consensus |
-| Culling | stars; `Assisted Culling\|Keeper`, `Rejected`, flags, `Why\|…` | groups, the same two ways; car identity from the **car tag node** |
+| Culling | stars; `Assisted Culling\|Keeper`, `Rejected`, flags, `Why\|…` | groups: native darktable groups or **tag node** boxes (e.g. `Assisted Grouping`); car identity from a tag node holding the tagging prefix |

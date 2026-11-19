@@ -910,8 +910,8 @@ M.TAG_KINDS = {
     { kind = "diag", label = "how it decided" },
 }
 M.ERR_NO_LAYER = "turn on at least one divide layer (camera and lens, tag or parent tag), or start from capture time or last run's groups"
-M.NOTICE_TAGS_OFF = "turn on Group tags, or the next run finds no group tags to start from"
-M.NOTICE_NO_LAYER = "turn on at least one divide layer"
+M.NOTICE_TAGS_OFF = "turn on Group tags, or this run's groups aren't saved for the next run to start from"
+M.NOTICE_NO_LAYER = "one group needs a divide layer: turn on Camera and lens, or type a Tag or Parent tag"
 M.NOTICE_SESSION_TAGS_OFF = "turn on Group tags, or no Session tags are written"
 
 -- Maps the pre-start_from preset keys to a start_from value; refine wins over timing.
@@ -935,7 +935,7 @@ function M.upgrade_preset_text(text)
     end
     if decoded.trace_tags == nil and decoded.write_tags == true then
         decoded.trace_tags = true
-        notes = { "preset upgraded: trace_tags set from write_tags (layer trace tags are now their own switch)" }
+        notes = { "preset upgraded: trace_tags set from write_tags (Layer trace tags is a separate switch)" }
         changed = true
     end
     if not changed then return text end
@@ -2192,7 +2192,7 @@ local function install_panel()
     local gap_box
     local start_combo = new_widget("combobox") {
         label = "start from",
-        tooltip = "capture time: a new group starts when the gap to the previous photo is longer than the burst gap. last run's groups: each photo's group tag from the latest earlier run; photos without one share one group. one group: every photo starts together and only the divide layers split it.",
+        tooltip = "Where the groups begin, before page 2 divides them. Default: capture time.\ncapture time: a new group starts when the gap to the previous photo is longer than the burst gap below.\nlast run's groups: each photo's newest Group tag from an earlier run; photos without one share one group. No capture times are read.\none group: every photo starts together, and only the divide layers on page 2 split it.",
         changed_callback = function(widget)
             local value = M.START_FROM[widget.selected]
             if not value or value == shown_start then return end
@@ -2206,7 +2206,7 @@ local function install_panel()
     start_combo.selected = 1
 
     local gap_entry = new_widget("entry") {
-        tooltip = "Burst gap in seconds: photos taken closer together than this are one burst. Must be above 0. Default: 2. Decimals are allowed (0.5 or 1,5). Lower it for fast bursts that should split; raise it when a burst has pauses. Type auto to pick the gap from the selection's own timing (the log shows the gap it chose; under 30 gaps or no clear split, it uses 2).",
+        tooltip = "Burst gap in seconds: photos taken closer together than this are one burst. Must be above 0. Default: 2. Decimals are allowed (0.5 or 1,5). Lower it when separate bursts end up in one group; raise it when a burst with pauses is split. Type auto to pick the gap from the selection's own timing, between 0.3 and 10 s (the log shows the gap it chose; with under 30 gaps or no clear split, it uses 2).",
         placeholder = "burst gap (seconds or auto), e.g. 2",
         text = "2",
     }
@@ -2216,13 +2216,13 @@ local function install_panel()
         gap_entry,
     }
     local min_entry = new_widget("entry") {
-        tooltip = "Minimum burst size in frames (a RAW+JPEG pair is one frame). A final group with fewer frames than this is left as single frames: no darktable group, and each frame gets its own Group tag. Default: 2, so any two frames can group. Raise it to 3 or more to keep stray pairs out of the groups.",
+        tooltip = "Minimum burst size in frames (a RAW+JPEG pair is one frame). A final group (after page 2's layers) with fewer frames than this is left as single frames: each frame gets its own Group tag, and a RAW+JPEG pair still stacks as a pair. Default: 2, so any two frames can group. Raise it to 3 or more to keep stray pairs out of the groups.",
         placeholder = "minimum burst size (frames), e.g. 2",
         text = "2",
     }
     local camera_check = new_widget("check_button") {
         label = "Camera and lens",
-        tooltip = "Divide each group by camera maker, model and lens.",
+        tooltip = "Divide each group by camera maker, model and lens. With start from capture time, each camera is also timed on its own, so one body's frames never join another's burst. Default: off.",
         value = false,
         clicked_callback = function() changed(); refresh_notice() end,
     }
@@ -2232,29 +2232,29 @@ local function install_panel()
         text = "",
     }
     local parent_entry = new_widget("entry") {
-        tooltip = "Divide each group by which tag directly under this node a photo carries. Photos with none, or several, aren't split by it (the log counts them). Empty = off. Example: Rally|2026. Use the Assisted Tagging prefix to split bursts by car.",
+        tooltip = "Divide each group by which tag directly under this node a photo carries. Photos with none, or several, aren't split off: they stay with the group's first part (the log counts them). Empty = off. Example: Cars|Number. Type the Assisted Tagging prefix (e.g. Rally|2026) to split bursts by car number.",
         placeholder = "parent tag, e.g. Cars|Number",
         text = "",
     }
     local native_check = new_widget("check_button") {
         label = "Apply darktable groups",
-        tooltip = "Default, quick output. Make one darktable group per final group of two or more photos. Photos already in a group you made by hand are skipped. Once this step starts, cancel is ignored so no group is left half-built.",
+        tooltip = "Make one darktable group per final group of two or more images (a lone RAW+JPEG frame counts). Images already in a group you made by hand are skipped. Default: on; the quicker output. Once this step starts, cancel is ignored so no group is left half-built.",
         clicked_callback = function() changed(); refresh_notice() end,
     }
     local tags_check = new_widget("check_button") {
         label = "Group tags",
-        tooltip = "Tag each photo with its Group under Assisted Grouping|<run time>|Group|... One tag per final group. Needed for last run's groups and browse as bursts.",
+        tooltip = "Tag each photo with its Group under Assisted Grouping|<run time>|Group|... One tag per final group. Needed for start from last run's groups and for browse as bursts (page 4). Default: off; slower on a large selection.",
         value = false,
         clicked_callback = function() changed(); refresh_notice() end,
     }
     local session_entry = new_widget("entry") {
-        tooltip = "Sessions above the groups. With a number above 0, each photo with a capture time also gets a Session tag under Assisted Grouping|<run time>|Session|...: a new session starts when the gap to the previous photo is longer than this many minutes. It splits no group. Written only when Group tags is on. Default: 0 (off). Example: 30.",
+        tooltip = "Sessions: a level above the groups. With a number above 0, each photo with a capture time also gets a Session tag under Assisted Grouping|<run time>|Session|...: a new session starts when the gap to the previous photo is longer than this many minutes. It splits no group. Written only when Group tags is on. Default: 0 (off). Example: 30.",
         placeholder = "session gap (minutes), 0 = off",
         text = "0",
     }
     local trace_check = new_widget("check_button") {
         label = "Layer trace tags",
-        tooltip = "Also write the Burst, Camera, Tag and Parent tags that show which layer split each group. Written only when Group tags is on. Off by default; slower on a large selection.",
+        tooltip = "Also write the Burst, Camera, Tag and Parent tags that show which layer split each group. Each is written only when its layer runs (Burst: start from capture time plus another layer, or a minimum burst size above 2). Written only when Group tags is on. Default: off; slower on a large selection.",
         value = false,
         clicked_callback = function() changed(); refresh_notice() end,
     }
@@ -2336,7 +2336,7 @@ local function install_panel()
 
     local group_button = new_widget("button") {
         label = "Group selection",
-        tooltip = "Group the selected photos by the layers above. Cancel from the progress bar: before anything is written it changes nothing, while tags are being written it stops partway (partial tags stay), and once darktable groups have started it is ignored.",
+        tooltip = "Group the selected photos with the settings on pages 1 to 3. Cancel from the progress bar: before anything is written it changes nothing, while tags are being written it stops partway (partial tags stay), and once darktable groups have started it is ignored.",
         clicked_callback = function()
             refresh_notice()
             local opts, why = read_options()
@@ -2355,7 +2355,7 @@ local function install_panel()
     }
     local clear_button = new_widget("button") {
         label = "Clear grouping marks",
-        tooltip = "Remove the group tags and darktable groups this plugin made from the selected photos. Tags and groups you made by hand stay.",
+        tooltip = "Remove the tags (Group, Session and layer trace) and darktable groups this plugin made from the selected photos. RAW+JPEG pairs are stacked again. Tags and groups you made by hand stay.",
         clicked_callback = function()
             local images = copy_images(dt.gui.action_images)
             if queue_if_busy("Clear grouping marks", #images > 0, function() M.clear_marks(images) end) then return end
@@ -2364,7 +2364,7 @@ local function install_panel()
     }
     local bursts_button = new_widget("button") {
         label = "bursts",
-        tooltip = "Put the selected photos back into their burst groups from the latest run's group tags. No capture times are read. Run Group selection with Group tags on first.",
+        tooltip = "Put the selected photos back into darktable groups from each photo's newest Group tag. Photos without one stay alone, and photos in a group you made by hand are skipped. No capture times are read and no tags are written. Run Group selection with Group tags on first.",
         clicked_callback = function()
             local images = copy_images(dt.gui.action_images)
             if queue_if_busy("browse as bursts", #images > 0, function() M.browse_bursts(images) end) then return end
@@ -2373,7 +2373,7 @@ local function install_panel()
     }
     local pairs_button = new_widget("button") {
         label = "pairs",
-        tooltip = "Take the selected photos, and everything grouped with them, out of their darktable groups, then stack each RAW with its JPEG again, as at import. Hand-made groups are reset too. Group tags stay, so Group selection brings the burst groups back.",
+        tooltip = "Take the selected photos, and everything grouped with them, out of their darktable groups, then stack each RAW with its JPEG again, as at import. Hand-made groups are reset too. Group tags stay, so bursts brings the groups back.",
         clicked_callback = function()
             local images = copy_images(dt.gui.action_images)
             if queue_if_busy("browse as pairs", #images > 0, function() M.reset_to_pairs(images) end) then return end
@@ -2435,7 +2435,7 @@ local function install_panel()
             trace_check,
         },
         {
-            new_widget("section_label") { label = "group (reads capture times; writes groups and tags)" },
+            new_widget("section_label") { label = "group (uses pages 1 to 3)" },
             group_button,
             new_widget("section_label") { label = "browse as (darktable groups only; tags kept)" },
             new_widget("box") {
