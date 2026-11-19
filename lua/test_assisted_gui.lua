@@ -434,6 +434,23 @@ click("Clear grouping marks", burst)
 check("clear, large burst: every image is rewritten once", group_writes, 40)
 check("clear, large burst: the job bar moved", jobs[1] and jobs[1].percent, 0.8)
 check("clear, large burst: the frames are alone again", images_by_id[140].group, 140)
+check("clear, large burst: the log has the timing line", read_file(ROOT .. "/config/assisted_grouping.log"):find(
+    "clear: timing: 40 of 40 images in %d+s; [%d.]+s in darktable calls, [%d.]+s waiting for darktable, [%d.]+s paused, %d+ pauses of 20 ms\n") ~= nil, true)
+
+-- the x on the job bar, clicked during the pause after the first image
+click("Group selection", burst)
+dt.control.sleep = function() jobs[1].valid = false end
+click("Clear grouping marks", burst)
+dt.control.sleep = function() end
+check("clear, cancelled: says how far it got", last_print(),
+    "Assisted Grouping: clear cancelled. Cleared grouping marks from 1 of 40 images; 39 not reached keep their marks.")
+check("clear, cancelled: the first frame is alone, the ones not reached stay grouped",
+    images_by_id[102].group .. " " .. images_by_id[103].group .. " " .. images_by_id[140].group, "102 101 101")
+check("clear, cancelled: the job bar is closed", jobs[1].valid, false)
+group_writes = 0
+click("Clear grouping marks", burst)
+check("clear, after a cancel: the next clear finishes the rest", group_writes, 39)
+check("clear, after a cancel: the frames are alone again", images_by_id[102].group, 102)
 
 -- Browse as bursts ------------------------------------------------------------------
 click("bursts", all)

@@ -1309,6 +1309,7 @@ du.check_min_api_version("7.0.0", "assisted_grouping")
 -- budget of writes the GUI gets a short sleep.
 local WRITE_BUDGET = 12
 local WRITE_SLEEP_MS = 20
+local WRITE_PAUSE_MAX_MS = 300 -- Clear pauses as long as darktable took to catch up, at most this
 -- exif_times.py reports no progress, so a run that hasn't finished in this long is
 -- given up on and the run uses whole seconds.
 local HELPER_TIMEOUT_SECONDS = 600
@@ -1428,6 +1429,9 @@ local busy = false
 local last_stamp_time = nil
 -- Jobs clicked while another runs: { label, run }, oldest first.
 local queue = {}
+-- Set by install_panel. Re-setting its label is a GUI call that waits until darktable has
+-- processed every write queued before it.
+local clear_button = nil
 
 -- A helper call's temp files. Each call gets its own names, so a helper still
 -- running after its run was cancelled or timed out can't touch the next run's files.
@@ -1930,10 +1934,11 @@ function M.clear_marks(images)
         return
     end
     busy = true
+    M.cancel_requested = false
     start_log("clear", #images)
     local job, ledger, changed = nil, nil, false
     local okr, err = C.logged_call(log, "clearing marks", function()
-        job = start_job("Clear grouping marks", #images)
+        job = start_job("Clear grouping marks", #images, true)
         ledger = read_ledger()
         local records, members_of, group_cache = {}, {}, {}
         for _, img in ipairs(images) do
@@ -1962,8 +1967,16 @@ function M.clear_marks(images)
         end
         flush_log()
         -- Clearing is the first 80% of the job bar, restoring the frame groups the rest.
-        local ungrouped = {}
+        -- Each write makes darktable rebuild its tagging lists. After each image the run waits
+        -- for darktable to catch up, then pauses as long again, so the backlog can't grow over
+        -- thousands of images. A cancel still restores the frame groups of the images reached.
+        local ungrouped, reached, stopped = {}, 0, false
+        local wait_s, pause_s, started = 0, 0, os.time()
         for i, id in ipairs(leaders_last(plan_ids, img_of)) do
+            if cancelled(job) then
+                stopped = true
+                break
+            end
             local plan = plan_of[id]
             local entry, img = ledger[plan.id], img_of[plan.id]
             local left = {}
@@ -1987,6 +2000,15 @@ function M.clear_marks(images)
             end
             M.set_ledger_tags(ledger, plan.id, left)
             M.set_ledger_native(ledger, plan.id, native)
+            reached = i
+            if (#plan.detach > 0 or plan.ungroup) and clear_button then
+                local wait_start = os.clock()
+                clear_button.label = clear_button.label
+                local waited_s = os.clock() - wait_start
+                local pause_ms = math.max(WRITE_SLEEP_MS, math.min(WRITE_PAUSE_MAX_MS, math.floor(waited_s * 1000)))
+                dt.control.sleep(pause_ms)
+                wait_s, pause_s = wait_s + waited_s, pause_s + pause_ms / 1000
+            end
             job.percent = 0.8 * i / #plans
         end
         -- Every image above was detached into a group of its own before any attach here,
@@ -2009,8 +2031,13 @@ function M.clear_marks(images)
         end
         log(string.format("clear: %d images, %d tags detached, %d taken out of native groups, %d frame groups restored, %d failed",
             #records, n_tags, n_ungrouped, n_restored, w.failed))
-        log(string.format("clear: timing: %.1fs in darktable calls, %d pauses of %d ms", w.call_s, w.sleeps, WRITE_SLEEP_MS))
-        if w.failed > 0 then
+        log(string.format("clear: timing: %d of %d images in %ds; %.1fs in darktable calls, %.1fs waiting for darktable, %.1fs paused, %d pauses of %d ms%s",
+            reached, #plans, os.time() - started, w.call_s, wait_s, pause_s, w.sleeps, WRITE_SLEEP_MS,
+            stopped and ", stopped at the job bar" or ""))
+        if stopped then
+            say(string.format("Assisted Grouping: clear cancelled. Cleared grouping marks from %d of %d images%s; %d not reached keep their marks.",
+                reached, #plans, w.failed > 0 and (", " .. w.failed .. " marks couldn't be cleared") or "", #plans - reached))
+        elseif w.failed > 0 then
             notify_error(string.format("Assisted Grouping: cleared grouping marks from %d images, but %d marks couldn't be cleared (%s). Clear again to retry.",
                 #records, w.failed, w.first_error))
         else
@@ -2353,9 +2380,9 @@ local function install_panel()
         label = PARTIAL_BURST_WARNING,
         halign = "start",
     }
-    local clear_button = new_widget("button") {
+    clear_button = new_widget("button") {
         label = "Clear grouping marks",
-        tooltip = "Remove the tags (Group, Session and layer trace) and darktable groups this plugin made from the selected photos. RAW+JPEG pairs are stacked again. Tags and groups you made by hand stay.",
+        tooltip = "Remove the tags (Group, Session and layer trace) and darktable groups this plugin made from the selected photos, with a job bar you can cancel. RAW+JPEG pairs are stacked again. Tags and groups you made by hand stay.",
         clicked_callback = function()
             local images = copy_images(dt.gui.action_images)
             if queue_if_busy("Clear grouping marks", #images > 0, function() M.clear_marks(images) end) then return end
