@@ -1443,15 +1443,22 @@ local function say(msg)
     log(msg)
 end
 
--- dt.print_error only writes to darktable's log (-d lua); users never see it.
+-- the "To check" box at the foot of the panel
+local alerts = C.alerts_box(new_widget, dt.configuration.config_dir .. "/assisted_grouping.checks.txt", log)
+
+-- dt.print_error only writes to darktable's log (-d lua); users never see it. Errors also go to To check.
 local function notify_error(msg)
     dt.print(msg)
     dt.print_error(msg)
     log(msg)
+    alerts.add((msg:gsub("^Assisted Grouping: ", "")))
 end
 
--- `what` names the job in the header: "group" or "clear".
+local ACTION_NAMES = { group = "Group", clear = "Clear", pairs = "Reset to pairs", bursts = "Browse as bursts", merge = "Merge groups" }
+
+-- `what` names the job in the header: "group" or "clear". The action's earlier To check items go.
 local function start_log(what, n)
+    alerts.begin(ACTION_NAMES[what])
     flush_log()
     run_log.rotate(LOGS_KEPT)
     log(string.format("%s started: darktable %s, %d images", what, tostring(dt.configuration.version), n))
@@ -2083,7 +2090,8 @@ function M.clear_marks(images)
         -- thousands of images. A cancel still restores the frame groups of the images reached.
         local ungrouped, reached, stopped = {}, 0, false
         local wait_s, pause_s, started = 0, 0, os.time()
-        for i, id in ipairs(leaders_last(plan_ids, img_of)) do
+        local order = leaders_last(plan_ids, img_of)
+        for i, id in ipairs(order) do
             if cancelled(job) then
                 stopped = true
                 break
@@ -2148,6 +2156,9 @@ function M.clear_marks(images)
         if stopped then
             say(string.format("Assisted Grouping: clear cancelled. Cleared grouping marks from %d of %d images%s; %d not reached keep their marks.",
                 reached, #plans, w.failed > 0 and (", " .. w.failed .. " marks couldn't be cleared") or "", #plans - reached))
+            local unreached = {}
+            for i = reached + 1, #order do unreached[#unreached + 1] = order[i] end
+            alerts.add(string.format("clear cancelled: %d photos not reached keep their marks", #unreached), unreached)
         elseif w.failed > 0 then
             notify_error(string.format("Assisted Grouping: cleared grouping marks from %d images, but %d marks couldn't be cleared (%s). Clear again to retry.",
                 #records, w.failed, w.first_error))
@@ -2670,6 +2681,7 @@ local function install_panel()
         end,
         ctl.widget,
         C.paged_sections("assisted_grouping", pages),
+        alerts.widget,
         warning_label, -- below the pages so it shows whichever is open
         notice,
     }
