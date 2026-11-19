@@ -1,7 +1,7 @@
 ok   CLI exit code
 ok   CLI log: start line with the file count
 ok   CLI log: the missing file is named
-FAIL CLI log: done line counts files without a capture time: got False, want True
+ok   CLI log: done line counts files without a capture time
 ok   SubSec '47' -> +0.47
 ok   SubSec '5' -> +0.5
 ok   SubSec '047' -> +0.047
@@ -30,7 +30,7 @@ ok   CLI exit code
 ok   CLI with cameras: one precision row per camera, sorted, before the overall line
 
 --- stderr ---
-23:55:38 py: C:\Users\Louis\AppData\Local\Temp\tmppxevzw9v\missing.jpg: couldn't read the capture time (Pillow: FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\Louis\\AppData\\Local\\Temp\\tmppxevzw9v\\missing.jpg'; exifread: FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\Louis\\AppData\\Local\\Temp\\tmppxevzw9v\\missing.jpg')
+00:25:33 py: C:\Users\Louis\AppData\Local\Temp\tmpz80zqpd8\missing.jpg: couldn't read the capture time (Pillow: FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\Louis\\AppData\\Local\\Temp\\tmpz80zqpd8\\missing.jpg'; exifread: FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\Louis\\AppData\\Local\\Temp\\tmpz80zqpd8\\missing.jpg')
 C:\Users\Louis\Pictures\DarkTable\Settings\Plugins\darktable-assisted-grouping\.venv\Lib\site-packages\PIL\TiffImagePlugin.py:982: UserWarning: Corrupt EXIF data.  Expecting to read 2 bytes but only got 0. 
   warnings.warn(str(msg))
-23:55:39 py: C:\Users\Louis\AppData\Local\Temp\tmppxevzw9v\junk.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file 'C:\\Users\\Louis\\AppData\\Local\\Temp\\tmppxevzw9v\\junk.arw')
+00:25:34 py: C:\Users\Louis\AppData\Local\Temp\tmpz80zqpd8\junk.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file 'C:\\Users\\Louis\\AppData\\Local\\Temp\\tmpz80zqpd8\\junk.arw')
