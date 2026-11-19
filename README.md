@@ -160,7 +160,7 @@ The **preset** picker at the top of the panel saves every panel setting (start f
 
 ## Panel options
 
-Below the [preset](#presets) picker are the page buttons **1 start groups ▸**, **2 divide groups ▸**, **3 output ▸**, **4 run ▸** and **5 tools ▸**: clicking one opens its contents below it (its label ends in **▾**) and folds the others; clicking the open one folds it. The open page is remembered across restarts. The partial-burst warning sits below the pages, shown whichever page is open. darktable's reset button (↺ in the panel header) puts every setting back to the template defaults; nothing is saved until you update a preset.
+Below the [preset](#presets) picker are the page buttons **1 start groups ▸**, **2 divide groups ▸**, **3 output ▸**, **4 run ▸** and **5 tools ▸**: clicking one opens its contents below it (its label ends in **▾**) and folds the others; clicking the open one folds it. The open page is remembered across restarts. The [To check](#to-check) box and the partial-burst warning sit below the pages, shown whichever page is open. darktable's reset button (↺ in the panel header) puts every setting back to the template defaults; nothing is saved until you update a preset.
 
 Layers run in a fixed order, and each one only divides the groups the one before produced; none merges.
 
@@ -208,6 +208,16 @@ Two headings, **group (uses pages 1 to 3)** and **browse as**.
 - **Clear grouping marks** (under **undo**). Removes the plugin's tags and darktable groups from the selected photos (see [Re-running and clearing](#re-running-and-clearing)).
 
 Everything in sections 1 to 3 is saved with the [preset](#presets).
+
+### To check
+
+A box below the pages lists what a run leaves for you to look at, so a toast that went by unseen isn't lost. It shows only when it has items.
+
+- Each line reads `<action>: <what happened>`: an error, or a **Clear grouping marks** cancelled partway (`clear cancelled: 39 photos not reached keep their marks`).
+- **Select** beside a line selects its photos in the lighttable. Photos removed from the library since are skipped, and a toast counts them.
+- The next run of the same action replaces that action's lines; other actions' lines stay. **Clear** empties the box.
+- Six lines show; more add `and N more (see the log)`. The list is saved to `assisted_grouping.checks.txt` in darktable's config folder, so it survives a restart.
+- A cancel that changed nothing adds no line. The partial-burst warning stays as standing guidance below the box.
 
 ## Preferences
 
