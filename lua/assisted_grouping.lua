@@ -1049,6 +1049,27 @@ local function still_in_ledger_group(id, leader, members, ledger)
     return false
 end
 
+-- The unselected partners Clear takes along: candidates with a ledger entry that share a
+-- frame (frame_key: same dir and stem) with a selected record, so a RAW+JPEG pair never
+-- ends up half cleared. records and candidates = { id, dir, filename }. Returns the
+-- partners sorted by id, each once.
+function M.plan_partners(records, candidates, ledger)
+    local frames, selected = {}, {}
+    for _, r in ipairs(records) do
+        selected[r.id] = true
+        if r.filename then frames[frame_key(r)] = true end
+    end
+    local partners = {}
+    for _, c in ipairs(candidates) do
+        if ledger[c.id] and not selected[c.id] and c.filename and frames[frame_key(c)] then
+            selected[c.id] = true
+            partners[#partners + 1] = c
+        end
+    end
+    table.sort(partners, function(a, b) return a.id < b.id end)
+    return partners
+end
+
 -- What Clear grouping marks does to each selected image with a ledger entry:
 -- detach = sorted ledger tags still on it, ungroup = whether to take it out of a
 -- native group the plugin made. records = { id, tags = set }; members_of[id] = the
@@ -1991,7 +2012,8 @@ function M.group_images(images, opts)
 end
 
 -- Detaches the ledger's tags and takes images out of the ledger's native groups for
--- the selection, then drops their ledger rows. Hand-made tags and groups stay. A
+-- the selection and its unselected RAW/JPEG partners (M.plan_partners), then drops their
+-- ledger rows. Hand-made tags and groups stay. A
 -- write that fails keeps its part of the row, so clearing again retries it.
 function M.clear_marks(images)
     if busy then
@@ -2009,14 +2031,34 @@ function M.clear_marks(images)
     local okr, err = C.logged_call(log, "clearing marks", function()
         job = start_job("Clear grouping marks", #images, true)
         ledger = read_ledger()
-        local records, members_of, group_cache = {}, {}, {}
+        local selected, films = {}, {}
         for _, img in ipairs(images) do
-            local id = tonumber(img.id)
-            if ledger[id] then
-                records[#records + 1] = { id = id, img = img, tags = M.tags_of(img), dir = img.path, filename = img.filename }
-                members_of[id] = group_members(img, group_cache)
+            selected[#selected + 1] = { id = tonumber(img.id), img = img, dir = img.path, filename = img.filename }
+            local okf, film = pcall(function() return img.film end)
+            if okf and film then films[film.id] = film end
+        end
+        -- Only images the ledger lists can be partners, so the film rolls are read by id first.
+        local candidates = {}
+        for _, film in pairs(films) do
+            local okr = pcall(function()
+                for i = 1, #film do
+                    local img = film[i]
+                    local id = tonumber(img.id)
+                    if ledger[id] then candidates[#candidates + 1] = { id = id, img = img, dir = img.path, filename = img.filename } end
+                end
+            end)
+            if not okr then log("clear: couldn't read film roll " .. tostring(film.path) .. "; its unselected RAW/JPEG partners keep their marks") end
+        end
+        local partners = M.plan_partners(selected, candidates, ledger)
+        for _, p in ipairs(partners) do selected[#selected + 1] = p end
+        local records, members_of, group_cache = {}, {}, {}
+        for _, s in ipairs(selected) do
+            if ledger[s.id] then
+                records[#records + 1] = { id = s.id, img = s.img, tags = M.tags_of(s.img), dir = s.dir, filename = s.filename }
+                members_of[s.id] = group_members(s.img, group_cache)
             end
         end
+        if #partners > 0 then log(string.format("clear: %d unselected RAW/JPEG partners of the selection included", #partners)) end
         if #records == 0 then
             say("Assisted Grouping: nothing to clear; the selection has no grouping marks.")
             return
@@ -2110,7 +2152,8 @@ function M.clear_marks(images)
             notify_error(string.format("Assisted Grouping: cleared grouping marks from %d images, but %d marks couldn't be cleared (%s). Clear again to retry.",
                 #records, w.failed, w.first_error))
         else
-            say(string.format("Assisted Grouping: cleared grouping marks from %d images.", #records))
+            say(string.format("Assisted Grouping: cleared grouping marks from %d images%s.", #records,
+                #partners > 0 and string.format(", %d of them unselected RAW/JPEG partners", #partners) or ""))
         end
     end)
 

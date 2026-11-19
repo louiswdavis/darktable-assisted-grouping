@@ -838,6 +838,18 @@ check("plan_clear: two cleared RAW+JPEG pairs -> two restore groups under their 
 check("plan_clear: a lone image gets no restore group", restore_str(prestore):find("15") == nil, true)
 check("plan_clear: hand-made cross-frame group is left alone", pplans[6].ungroup or pplans[7].ungroup, false)
 
+-- plan_partners -----------------------------------------------------------------------
+do
+local partner_ledger = { [11] = { tags = {} }, [12] = { tags = {} }, [14] = { tags = {} }, [16] = { tags = {} } }
+local partners = A.plan_partners({ crec(11, "DSC1.ARW"), crec(13, "DSC2.ARW") },
+    { crec(12, "dsc1.jpg"), crec(11, "DSC1.ARW"), crec(14, "DSC2.JPG"), crec(15, "DSC2.HEIC"), crec(16, "DSC3.JPG"), crec(12, "dsc1.jpg") },
+    partner_ledger)
+local ids = {}
+for _, p in ipairs(partners) do ids[#ids + 1] = p.id end
+check("plan_partners: unselected same-frame images the ledger lists, each once; selected, unledgered and other frames left",
+    table.concat(ids, ","), "12,14")
+end
+
 -- plan_pairs --------------------------------------------------------------------------
 local pair_groups = A.plan_pairs({
     crec(14, "DSC0002.JPG"), crec(11, "DSC0001.ARW"), crec(12, "dsc0001.jpg"), crec(13, "DSC0002.ARW"),

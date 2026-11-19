@@ -67,6 +67,8 @@ Any embedding cut-off (split on car change, visual check, similarity slider) nee
 
 ## RAW + JPEG pairs
 
+**Built 2026-11-19, awaiting a Windows run (README test step 20).** Clear reads the selection's film rolls and takes along the unselected images of a selected frame that the ledger lists (`M.plan_partners`).
+
 Clear marks on the unselected partner of a RAW/JPEG pair, so the pair doesn't show two different states.
 
 ## Smaller known gaps

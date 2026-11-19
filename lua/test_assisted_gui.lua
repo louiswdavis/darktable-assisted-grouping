@@ -505,6 +505,17 @@ check("clear retry: reports the images cleared", last_print(), "Assisted Groupin
 check("clear: the burst is split", jpeg2.group ~= jpeg1.group, true)
 check("clear: the RAW is stacked with its JPEG again", raw1.group == jpeg1.group, true)
 
+-- Only the JPEGs selected: the unselected RAW of the first frame is cleared with them.
+local roll = { id = 1, path = "/photos", jpeg1, jpeg2, jpeg3, raw1 }
+for _, img in ipairs(roll) do rawset(img, "film", roll) end
+G.group_images(all, { timing = true, gap = 2, camera = false, refine = false, write_tags = true, trace_tags = false, native_groups = true })
+click("Clear grouping marks", { jpeg1, jpeg2, jpeg3 })
+check("clear, JPEGs only: the toast counts the unselected RAW", last_print(),
+    "Assisted Grouping: cleared grouping marks from 4 images, 1 of them unselected RAW/JPEG partners.")
+check("clear, JPEGs only: the RAW's group tag is gone too", group_tag_count(raw1), 0)
+check("clear, JPEGs only: the RAW is stacked with its JPEG again", raw1.group == jpeg1.group and jpeg2.group ~= jpeg1.group, true)
+check("clear, JPEGs only: the ledger forgets the RAW", ledger_text():find('"' .. raw1.id .. '"', 1, true), nil)
+
 click("Clear grouping marks", all)
 check("clear, nothing left: says so", last_print(), "Assisted Grouping: nothing to clear; the selection has no grouping marks.")
 check("clear, nothing left: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
