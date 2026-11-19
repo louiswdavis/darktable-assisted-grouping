@@ -2,7 +2,7 @@
 
 Ideas worth doing deliberately later, not bolted onto whatever's being fixed today.
 
-Background for the items below came from desk research in November 2026: unbuilt ideas found in old specs and audits; how Aftershoot, Narrative Select, Lightroom and others group similar shots; models that run under cv2.dnn or onnxruntime; and the patents and papers behind shot grouping (no tool publishes its algorithm). What matters is written out in each item.
+Background for the items below came from desk research in November 2026: unbuilt ideas found in old specs and audits; how Aftershoot, Narrative Select, Lightroom and others group similar shots; models that run under cv2.dnn or onnxruntime; and the patents and papers behind shot grouping (no tool publishes its algorithm). What matters is written out in each item. A second pass on 2026-11-19 added the darktable Lua events, perceptual-hash burst grouping and import-time grouping.
 
 Competitor figures are vendor claims and have not been checked.
 
@@ -70,6 +70,44 @@ Any embedding cut-off (split on car change, visual check, similarity slider) nee
 **Built 2026-11-19, awaiting a Windows run (README test step 20).** Clear reads the selection's film rolls and takes along the unselected images of a selected frame that the ledger lists (`M.plan_partners`).
 
 Clear marks on the unselected partner of a RAW/JPEG pair, so the pair doesn't show two different states.
+
+## Notice hand edits when they happen
+
+darktable fires `image-group-information-changed` on every grouping change, with a reason
+(`add`, `remove`, `leader-change`, `remove-leader`), the image and its leader (Lua API manual,
+events). A callback could note a hand change in the ledger at the moment it happens, instead of
+`plan_native` inferring it on the next run. That would also close the "group mates removed from the
+library" limitation, which today counts as hand-made for one run.
+- the plugin's own `group_with` calls fire the event too: ignore it while a run or Clear is writing
+- check first on Windows which UI actions fire which reason (the manual doesn't say)
+Effort S–M.
+
+## Group on import
+
+The `post-import-film` event fires when a film roll finishes importing. An opt-in preference runs
+grouping on the new roll straight away, so the lighttable opens already stacked. Effort S; the
+run itself is unchanged.
+
+## Cheap hash before embeddings
+
+A 64-bit perceptual hash (dHash) per frame costs almost nothing. A burst patent (USPTO 11763369)
+joins frames whose hashes differ by 4 bits or fewer; snapsift (Apple Photos tool) uses time gaps
+first, then dHash for near-duplicates across time. For grouping:
+- a first pass for "Time cuts, then a visual check": hash-identical frames on both sides of a cut
+  join without computing embeddings
+- the same hash as the "Visual-neighbour fallback" when times are missing or tied
+Hashes can't tell two cars in the same spot apart, so they only ever join frames within a
+short time window. Effort S on the Python side.
+
+## Export and import presets
+
+Asked for 2026-11-19. Full design in tagging's ROADMAP ("Export and import presets"): an
+**Export preset…** dialog with tick boxes per layer, a folder bundle with a `manifest.json`,
+import through `M.upgrade_preset_text`. For grouping only layer 1 applies: the preset JSON from
+`<config dir>/assisted_grouping/presets/`. The ledger is never exported (image ids are
+per-library). The "rally set" bundle (same-named preset from all three panels, per WORKFLOW.md)
+is the part grouping users gain most from. Shared code in `plugin_common.lua`, so all three repos
+and COMMON_HASH change together. Effort S here once the shared part exists.
 
 ## Smaller known gaps
 
