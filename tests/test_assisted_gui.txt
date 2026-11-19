@@ -105,6 +105,17 @@ ok   clear, JPEGs only: the RAW is stacked with its JPEG again
 ok   clear, JPEGs only: the ledger forgets the RAW
 ok   clear, nothing left: says so
 ok   clear, nothing left: the job bar is closed
+ok   verify: says it started
+ok   verify, no leader: the row names the photo and the Fix
+ok   verify, no leader: nothing is written
+ok   verify, no leader: Fix makes the lowest image the leader
+ok   verify, after Fix: no row
+ok   verify: writes no group and no tag
+ok   verify: the toast counts what differs
+ok   verify: one row for the photos a fresh run would change, with Fix = Group selection
+ok   verify: the lone frame's reason is its missing Group tag
+ok   verify, Fix: Group selection ran on those photos
+ok   verify, after Fix: no row, the box hides
 ok   the warning and notice lines sit at the foot of the panel, outside the folding pages
 ok   presets: Rally is stored
 ok   presets: export is offered for a saved preset

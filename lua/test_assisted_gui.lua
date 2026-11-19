@@ -174,6 +174,13 @@ local function image(id, filename, taken)
         end
         return members
     end
+    function img:make_group_leader()
+        group_writes = group_writes + 1
+        local old = self.group
+        for other_id = 1, #images_by_id do
+            if images_by_id[other_id].group == old then images_by_id[other_id].group = self.id end
+        end
+    end
     -- As in darktable: taking a leader out hands its group to the next member and rewrites
     -- every image left in it. `group_writes` counts the images darktable rewrites.
     function img:group_with(leader)
@@ -545,6 +552,40 @@ check("clear, JPEGs only: the ledger forgets the RAW", ledger_text():find('"' ..
 click("Clear grouping marks", all)
 check("clear, nothing left: says so", last_print(), "Assisted Grouping: nothing to clear; the selection has no grouping marks.")
 check("clear, nothing left: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
+
+-- Verify selection ------------------------------------------------------------------
+;(button(to_check, "Clear") or { clicked_callback = function() end }).clicked_callback()
+-- A group whose leader is gone (no image 999): darktable still lists the image in it.
+jpeg3.group = 999
+group_writes = 0
+click("Verify selection", { jpeg3 })
+check("verify: says it started", prints[1], "Assisted Grouping: Verify selection started on 1 image…")
+check("verify, no leader: the row names the photo and the Fix",
+    (read_file(CHECKS_FILE) or ""):find("Verify selection\t1 photos are in a darktable group whose leader is missing or outside it. Fix makes the group's lowest image its leader.\t3\tleader", 1, true) ~= nil, true)
+check("verify, no leader: nothing is written", group_writes, 0)
+;(button(to_check, "Fix") or { clicked_callback = function() end }).clicked_callback()
+check("verify, no leader: Fix makes the lowest image the leader", jpeg3.group, 3)
+click("Verify selection", { jpeg3 })
+check("verify, after Fix: no row", (read_file(CHECKS_FILE) or ""):find("Verify selection\t", 1, true), nil)
+
+tags_check.value = true
+local ledger_before = ledger_text()
+group_writes = 0
+click("Verify selection", all)
+check("verify: writes no group and no tag", string.format("%d %d %s", group_writes, group_tag_count(jpeg1),
+    tostring(ledger_text() == ledger_before)), "0 0 true")
+check("verify: the toast counts what differs", last_print(),
+    "Assisted Grouping: verify only, nothing changed. 4 of 4 images differ from a fresh Group selection run, 0 are in a group with no leader inside it.")
+check("verify: one row for the photos a fresh run would change, with Fix = Group selection",
+    (read_file(CHECKS_FILE) or ""):find("Verify selection\t4 photos differ from a fresh Group selection run with these settings. Fix runs Group selection on them.\t", 1, true) ~= nil, true)
+check("verify: the lone frame's reason is its missing Group tag",
+    (read_file(CHECKS_FILE) or ""):find("DSC00003.JPG: no Group tag", 1, true) ~= nil, true)
+;(button(to_check, "Fix") or { clicked_callback = function() end }).clicked_callback()
+check("verify, Fix: Group selection ran on those photos", jpeg2.group == jpeg1.group and group_tag_count(jpeg3), 1)
+click("Verify selection", all)
+check("verify, after Fix: no row, the box hides", tostring((read_file(CHECKS_FILE) or ""):find("Verify selection\t", 1, true)) .. " " .. tostring(to_check.visible), "nil false")
+tags_check.value = false
+click("Clear grouping marks", all)
 
 -- Export and import presets -------------------------------------------------------------
 local function widget_where(widget, kind, field, value)

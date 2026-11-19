@@ -154,6 +154,11 @@ ok   plan_native keeps an image moved by hand into another plugin group, that gr
 ok   plan_native keeps an image taken out of a plugin group by hand alone
 ok   plan_native keeps a leader taken out of a plugin group by hand alone
 ok   plan_native leaves a two-image plugin group split by hand apart
+ok   plan_verify lists every frame of a never-grouped selection
+ok   plan_verify lists nothing when tags and groups match a fresh run
+ok   plan_verify compares Group tags by which frames share them, not by name
+ok   plan_verify leaves out a frame the run skips as hand-made, tags too
+ok   plan_verify lists an image whose darktable group has no leader inside it
 ok   plan_merge joins every image of the selection's groups to the lowest id's group
 ok   plan_merge: one group has nothing to merge
 ok   repoint_stale_leaders points a group at its lowest surviving id and frees a lone survivor

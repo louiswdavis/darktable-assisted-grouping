@@ -784,7 +784,8 @@ end
 -- the plugin's old groups dissolve on a re-run. A final group that is already one
 -- native group with exactly those images, led by the lowest id (`members_of[id].leader`),
 -- is left as it is.
--- Returns { detach = sorted ids, groups = { { leader, members = sorted ids } }, skipped = n images, unchanged = n images }.
+-- Returns { detach = sorted ids, groups = { { leader, members = sorted ids } }, skipped = n images, unchanged = n images,
+-- hand = { [unit id] = true } for the frames skipped }.
 function M.plan_native(units, final_of, ledger, members_of)
     local by_group, order = {}, {}
     for _, unit in ipairs(units) do
@@ -827,7 +828,7 @@ function M.plan_native(units, final_of, ledger, members_of)
         return table.concat(ids, ",") == table.concat(kept, ",")
     end
 
-    local plan, detach, skipped_unit = { detach = {}, groups = {}, skipped = 0, unchanged = 0 }, {}, {}
+    local plan, detach = { detach = {}, groups = {}, skipped = 0, unchanged = 0, hand = {} }, {}
     local settled = {}
     for _, g in ipairs(order) do
         local n = 0
@@ -836,7 +837,7 @@ function M.plan_native(units, final_of, ledger, members_of)
             local kept = {}
             for _, unit in ipairs(by_group[g]) do
                 if hand_made(unit) then
-                    skipped_unit[unit] = true
+                    plan.hand[unit.id] = true
                     plan.skipped = plan.skipped + #unit.members
                 else
                     for _, m in ipairs(unit.members) do kept[#kept + 1] = m.id end
@@ -855,7 +856,7 @@ function M.plan_native(units, final_of, ledger, members_of)
         end
     end
     for _, unit in ipairs(units) do
-        if not skipped_unit[unit] then
+        if not plan.hand[unit.id] then
             for _, m in ipairs(unit.members) do
                 if ledger[m.id] and ledger[m.id].native and not settled[m.id] then detach[m.id] = true end
             end
@@ -864,6 +865,62 @@ function M.plan_native(units, final_of, ledger, members_of)
     for id in pairs(detach) do plan.detach[#plan.detach + 1] = id end
     table.sort(plan.detach)
     return plan
+end
+
+-- What Verify selection reports; nothing is written. `fresh` lists the frames a Group selection
+-- run with `opts` would change, as { unit, reasons }, in unit order. Frames the run skips as
+-- hand-made (M.plan_native) are left out when native groups are on. Group tags are compared by
+-- which frames share each frame's newest one, since every run stamps new names. `broken` is the
+-- sorted ids of images whose darktable group has no leader inside it (`members_of[id].broken`).
+function M.plan_verify(units, final_of, ledger, members_of, opts)
+    local plan = M.plan_native(units, final_of, ledger, members_of)
+    local differs = {}
+    for _, id in ipairs(plan.detach) do differs[id] = true end
+
+    -- unit -> the ids of the units sharing its key, in unit order, so equal sets give equal text
+    local function mates(key_of)
+        local ids_of, text_of = {}, {}
+        for _, unit in ipairs(units) do
+            local key = key_of(unit)
+            if key then
+                ids_of[key] = ids_of[key] or {}
+                table.insert(ids_of[key], unit.id)
+            end
+        end
+        for _, unit in ipairs(units) do
+            local key = key_of(unit)
+            text_of[unit.id] = key and table.concat(ids_of[key], ",")
+        end
+        return text_of
+    end
+    local by_tag = mates(function(unit) return M.latest_group_tag(unit.tags) end)
+    local by_final = mates(function(unit) return final_of[unit.id] end)
+
+    local result = { fresh = {}, broken = {} }
+    for _, unit in ipairs(units) do
+        local reasons = {}
+        if opts.native_groups and not plan.hand[unit.id] then
+            for _, m in ipairs(unit.members) do
+                if differs[m.id] then
+                    reasons[1] = "darktable group differs"
+                    break
+                end
+            end
+        end
+        if opts.write_tags and not (opts.native_groups and plan.hand[unit.id]) then
+            if not by_tag[unit.id] then
+                reasons[#reasons + 1] = "no Group tag"
+            elseif by_tag[unit.id] ~= by_final[unit.id] then
+                reasons[#reasons + 1] = "Group tag differs"
+            end
+        end
+        if #reasons > 0 then result.fresh[#result.fresh + 1] = { unit = unit, reasons = reasons } end
+        for _, m in ipairs(unit.members) do
+            if members_of[m.id].broken then result.broken[#result.broken + 1] = m.id end
+        end
+    end
+    table.sort(result.broken)
+    return result
 end
 
 -- Panel options ----------------------------------------------------------------
@@ -1443,8 +1500,9 @@ local function say(msg)
     log(msg)
 end
 
--- the "To check" box at the foot of the panel
-local alerts = C.alerts_box(new_widget, dt.configuration.config_dir .. "/assisted_grouping.checks.txt", log)
+-- the "To check" box at the foot of the panel; `fixes` is filled once the actions exist
+local fixes = {}
+local alerts = C.alerts_box(new_widget, dt.configuration.config_dir .. "/assisted_grouping.checks.txt", log, fixes)
 
 -- dt.print_error only writes to darktable's log (-d lua); users never see it. Errors also go to To check.
 local function notify_error(msg)
@@ -1454,9 +1512,9 @@ local function notify_error(msg)
     alerts.add((msg:gsub("^Assisted Grouping: ", "")))
 end
 
-local ACTION_NAMES = { group = "Group", clear = "Clear", pairs = "Reset to pairs", bursts = "Browse as bursts", merge = "Merge groups" }
+local ACTION_NAMES = { group = "Group", verify = "Verify selection", clear = "Clear", pairs = "Reset to pairs", bursts = "Browse as bursts", merge = "Merge groups" }
 
--- `what` names the job in the header: "group" or "clear". The action's earlier To check items go.
+-- `what` names the job in the header: "group", "verify" or "clear". The action's earlier To check items go.
 local function start_log(what, n)
     alerts.begin(ACTION_NAMES[what])
     flush_log()
@@ -1738,19 +1796,34 @@ local function apply_tags(run, records, wanted, job, progress)
 end
 
 -- The images in `img`'s darktable group as { id, dir, filename, img } records, itself included.
+-- `broken` is set when the group's leader is missing or not among them.
 -- `cache` is keyed by group leader, so each group is read from darktable once.
 local function group_members(img, cache)
     local leader = img.group_leader
     local key = tonumber(leader and leader.id or img.id)
     if not cache[key] then
-        local list = {}
+        local list = { leader = key, broken = not leader }
+        local found = false
         for _, other in ipairs(img:get_group_members()) do
             list[#list + 1] = { id = tonumber(other.id), dir = other.path, filename = other.filename, img = other }
+            found = found or list[#list].id == key
         end
-        list.leader = key
+        list.broken = list.broken or not found
         cache[key] = list
     end
     return cache[key]
+end
+
+-- id -> darktable image and id -> its group's members (group_members), for every image of `units`.
+local function read_members(units)
+    local img_of, members_of, group_cache = {}, {}, {}
+    for _, unit in ipairs(units) do
+        for _, m in ipairs(unit.members) do
+            img_of[m.id] = m.img
+            members_of[m.id] = group_members(m.img, group_cache)
+        end
+    end
+    return img_of, members_of
 end
 
 -- `ids` with group leaders moved to the end. Taking a leader out makes darktable rewrite every
@@ -1775,14 +1848,7 @@ end
 -- partial failure still leaves it accurate.
 -- `progress(fraction)` is called as the work advances: detaching is the first half, attaching the second.
 function M.apply_native_groups(units, final_of, ledger, progress)
-    local img_of, members_of, group_cache = {}, {}, {}
-    for _, unit in ipairs(units) do
-        for _, m in ipairs(unit.members) do
-            img_of[m.id] = m.img
-            members_of[m.id] = group_members(m.img, group_cache)
-        end
-    end
-
+    local img_of, members_of = read_members(units)
     local plan = M.plan_native(units, final_of, ledger, members_of)
     local w = C.paced_writer(dt, WRITE_BUDGET, WRITE_SLEEP_MS, log)
     local write, grouped = w.write, 0
@@ -1853,7 +1919,8 @@ local function finish_job(job, ledger)
 end
 
 -- opts = { timing, gap, min_frames, session_gap, camera, tag, parent, refine, write_tags, trace_tags,
--- native_groups }, as M.panel_options returns them.
+-- native_groups }, as M.panel_options returns them. With `verify` set, the run writes nothing and
+-- puts what a real run would change in To check (M.plan_verify).
 function M.group_images(images, opts)
     if busy then
         dt.print("Assisted Grouping: another job is still running. Wait for it to finish, or cancel it first.")
@@ -1871,7 +1938,7 @@ function M.group_images(images, opts)
     stamp, last_stamp_time = M.run_stamp(os.time(), last_stamp_time)
     busy = true
     M.cancel_requested = false
-    start_log("group", #images)
+    start_log(opts.verify and "verify" or "group", #images)
     log(string.format("run stamp %s; timing %s, gap %s s, min frames %s, session gap %s s, camera %s, tag %s, parent %s, refine %s, tags %s, native groups %s",
         stamp, tostring(opts.timing ~= false), tostring(opts.gap), tostring(opts.min_frames), tostring(opts.session_gap),
         tostring(opts.camera), tostring(opts.tag), tostring(opts.parent),
@@ -1880,7 +1947,7 @@ function M.group_images(images, opts)
     local job, run = nil, { ledger = nil, applying = false }
     local run_began = os.time()
     local okr, err = C.logged_call(log, "group selection", function()
-        job = start_job("Group selection", #images, true)
+        job = start_job(opts.verify and "Verify selection" or "Group selection", #images, true)
         local records = M.build_images(images, M.needs_tags(opts))
         local units = M.collapse(records)
         local layer_opts = { gap = opts.gap, timing = opts.timing, camera = opts.camera, tag = opts.tag,
@@ -1977,6 +2044,28 @@ function M.group_images(images, opts)
         -- Groups need the whole selection, so a cancelled run writes nothing.
         if cancelled(job) then
             say("Assisted Grouping: cancelled, nothing was changed.")
+            return
+        end
+        if opts.verify then
+            local _, members_of = read_members(units)
+            local found = M.plan_verify(units, result.final_of, read_ledger(), members_of, opts)
+            local fresh_ids, fresh_why, broken_why, filename_of = {}, {}, {}, {}
+            for _, f in ipairs(found.fresh) do
+                for _, m in ipairs(f.unit.members) do fresh_ids[#fresh_ids + 1] = m.id end
+                fresh_why[#fresh_why + 1] = f.unit.members[1].filename .. ": " .. table.concat(f.reasons, "; ")
+            end
+            for _, r in ipairs(records) do filename_of[r.id] = r.filename end
+            for _, id in ipairs(found.broken) do broken_why[#broken_why + 1] = filename_of[id] .. ": no leader inside its group" end
+            say(string.format("Assisted Grouping: verify only, nothing changed. %d of %d images differ from a fresh Group selection run, %d are in a group with no leader inside it.",
+                #fresh_ids, #records, #found.broken))
+            if #fresh_ids > 0 then
+                alerts.add(string.format("%d photos differ from a fresh Group selection run with these settings. Fix runs Group selection on them.",
+                    #fresh_ids), fresh_ids, "group", fresh_why)
+            end
+            if #found.broken > 0 then
+                alerts.add(string.format("%d photos are in a darktable group whose leader is missing or outside it. Fix makes the group's lowest image its leader.",
+                    #found.broken), found.broken, "leader", broken_why)
+            end
             return
         end
         run.ledger = read_ledger()
@@ -2364,6 +2453,26 @@ function M.merge_groups(images)
     run_next()
 end
 
+-- To check fixes ------------------------------------------------------------------
+-- fixes.group needs the panel's options, so the panel adds it.
+
+-- Verify's no-leader row: makes the lowest image of each group in `images` its leader.
+fixes.leader = function(images)
+    local done, n = {}, 0
+    for _, img in ipairs(images) do
+        local lowest
+        for _, other in ipairs(img:get_group_members()) do
+            if not lowest or other.id < lowest.id then lowest = other end
+        end
+        if not done[lowest.id] then
+            done[lowest.id] = true
+            lowest:make_group_leader()
+            n = n + 1
+        end
+    end
+    say(string.format("Assisted Grouping: %d darktable groups now led by their lowest image.", n))
+end
+
 local preset_file_store, make_preset_controls = C.preset_file_store, C.make_preset_controls
 
 
@@ -2540,20 +2649,30 @@ local function install_panel()
         return M.panel_options(panel_state())
     end
 
+    -- Group selection, or Verify selection when `verify`, on `images` with the panel's options.
+    local function run_group(images, verify)
+        refresh_notice()
+        local opts, why = read_options()
+        if not opts then
+            dt.print("Assisted Grouping: " .. why)
+            return
+        end
+        opts.verify = verify
+        local label = verify and "Verify selection" or "Group selection"
+        if queue_if_busy(label, #images > 0, function() M.group_images(images, opts) end) then return end
+        M.group_images(images, opts)
+    end
+    fixes.group = function(images) run_group(images, false) end
+
     local group_button = new_widget("button") {
         label = "Group selection",
         tooltip = "Group the selected photos with the settings on pages 1 to 3. Cancel from the progress bar: before anything is written it changes nothing, while tags are being written it stops partway (partial tags stay), and once darktable groups have started it is ignored.",
-        clicked_callback = function()
-            refresh_notice()
-            local opts, why = read_options()
-            if not opts then
-                dt.print("Assisted Grouping: " .. why)
-                return
-            end
-            local images = copy_images(dt.gui.action_images)
-            if queue_if_busy("Group selection", #images > 0, function() M.group_images(images, opts) end) then return end
-            M.group_images(images, opts)
-        end,
+        clicked_callback = function() run_group(copy_images(dt.gui.action_images), false) end,
+    }
+    local verify_button = new_widget("button") {
+        label = "Verify selection",
+        tooltip = "Check the selected photos against a fresh Group selection run with the settings on pages 1 to 3, and list what differs in To check. Nothing is written. Photos in a group you made by hand are left out, as Group selection skips them. Also lists photos in a darktable group with no leader inside it.",
+        clicked_callback = function() run_group(copy_images(dt.gui.action_images), true) end,
     }
     local warning_label = new_widget("label") {
         label = PARTIAL_BURST_WARNING,
@@ -2653,6 +2772,7 @@ local function install_panel()
         {
             new_widget("section_label") { label = "group (uses pages 1 to 3)" },
             group_button,
+            verify_button,
             new_widget("section_label") { label = "browse as (darktable groups only; tags kept)" },
             new_widget("box") {
                 orientation = "horizontal",

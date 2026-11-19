@@ -602,6 +602,52 @@ check("plan_native leaves a two-image plugin group split by hand apart",
     "detach 3,4; groups 3:3,4; skipped 2")
 end
 
+-- plan_verify --------------------------------------------------------------------
+do
+local stamp = A.run_stamp(1000000)
+local function tagged(id, n)
+    local r = rec(id, "v" .. id .. ".cr2")
+    if n then r.tags[A.group_tag(stamp, "Group", n)] = true end
+    return r
+end
+local function verify_str(v)
+    local out = {}
+    for _, f in ipairs(v.fresh) do out[#out + 1] = f.unit.id .. " " .. table.concat(f.reasons, "+") end
+    return table.concat(out, "; ") .. " | broken " .. table.concat(v.broken, ",")
+end
+local both = { native_groups = true, write_tags = true }
+local bare = { tagged(1), tagged(2), tagged(3), tagged(4) }
+check("plan_verify lists every frame of a never-grouped selection",
+    verify_str(A.plan_verify(A.collapse(bare), final, {}, alone(bare), both)),
+    "1 darktable group differs+no Group tag; 2 darktable group differs+no Group tag; "
+        .. "3 darktable group differs+no Group tag; 4 no Group tag | broken ")
+
+local done = { tagged(1, 1), tagged(2, 1), tagged(3, 1), tagged(4, 2) }
+local burst_now = { done[1], done[2], done[3], leader = 1 }
+local done_ledger = { [1] = { tags = {}, native = 1 }, [2] = { tags = {}, native = 1 }, [3] = { tags = {}, native = 1 } }
+check("plan_verify lists nothing when tags and groups match a fresh run",
+    verify_str(A.plan_verify(A.collapse(done), final, done_ledger,
+        { [1] = burst_now, [2] = burst_now, [3] = burst_now, [4] = { done[4], leader = 4 } }, both)),
+    " | broken ")
+
+local split = { tagged(1, 1), tagged(2, 1), tagged(3, 2), tagged(4, 3) }
+check("plan_verify compares Group tags by which frames share them, not by name",
+    verify_str(A.plan_verify(A.collapse(split), final, {}, alone(split), { write_tags = true })),
+    "1 Group tag differs; 2 Group tag differs; 3 Group tag differs | broken ")
+
+local by_hand = alone(bare)
+by_hand[2] = { bare[2], rec(9, "z.cr2") }
+check("plan_verify leaves out a frame the run skips as hand-made, tags too",
+    verify_str(A.plan_verify(A.collapse(bare), final, {}, by_hand, both)),
+    "1 darktable group differs+no Group tag; 3 darktable group differs+no Group tag; 4 no Group tag | broken ")
+
+local leaderless = alone(done)
+leaderless[4] = { done[4], leader = 4, broken = true }
+check("plan_verify lists an image whose darktable group has no leader inside it",
+    verify_str(A.plan_verify(A.collapse(done), final, {}, leaderless, { native_groups = true })),
+    "1 darktable group differs; 2 darktable group differs; 3 darktable group differs | broken 4")
+end
+
 -- plan_merge ---------------------------------------------------------------------
 do
 local function group(leader, ids)
