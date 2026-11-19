@@ -213,7 +213,7 @@ Everything in sections 1 to 3 is saved with the [preset](#presets).
 
 A box below the pages lists what a run leaves for you to look at, so a toast that went by unseen isn't lost. It shows only when it has items.
 
-- Each line reads `<action>: <what happened>`: an error, or a **Clear grouping marks** cancelled partway (`clear cancelled: 39 photos not reached keep their marks`).
+- The box is headed **To check**. Each item reads `<action>: <what happened>` in full, wrapped over as many lines as it needs, with its buttons below: an error, or a **Clear grouping marks** cancelled partway (`clear cancelled: 39 photos not reached keep their marks`). The newest run's items sit on top. Older runs' items move below an *Earlier runs (before HH:MM): may not hold any more* line, since a later run can have settled them; they stay until you remove them, so a Fix still works.
 - **Select** beside a line selects its photos in the lighttable. Photos removed from the library since are skipped, and a toast counts them.
 - The next run of the same action replaces that action's lines; other actions' lines stay. **Clear** empties the box.
 - Six lines show; more add `and N more (see the log)`. The list is saved to `assisted_grouping.checks.txt` in darktable's config folder, so it survives a restart.

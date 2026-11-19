@@ -473,7 +473,7 @@ to_check = type(to_check) == "table" and to_check[1] and to_check[1][1] and to_c
 local CHECKS_FILE = ROOT .. "/config/assisted_grouping.checks.txt"
 check("To check: the cancelled clear shows in the box", to_check.visible, true)
 check("To check: the row names the action and the count",
-    (to_check[2][1] or {}).label, "Clear: clear cancelled: 39 photos not reached keep their marks")
+    ((to_check[2][1] or {}).label or ""):gsub("\n", " "), "Clear: clear cancelled: 39 photos not reached keep their marks")
 check("To check: the item is saved for a restart",
     (read_file(CHECKS_FILE) or ""):find("Clear\tclear cancelled: 39 photos not reached keep their marks\t", 1, true) ~= nil, true)
 selection_sets = 0
