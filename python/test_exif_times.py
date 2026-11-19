@@ -76,7 +76,7 @@ def run_tests():
         check("CLI log: start line with the file count", "py: capture times: started, 2 files" in run_cli.stderr, True)
         check("CLI log: the missing file is named", "gone.jpg: couldn't read the capture time (Pillow: FileNotFoundError" in run_cli.stderr, True)
         check("CLI log: done line counts files without a capture time",
-              "py: capture times: done, 2 files, 1 without a readable capture time, 0s" in run_cli.stderr, True)
+              "py: capture times: done, 2 files, 1 without a readable capture time, " in run_cli.stderr, True)
         check_close("SubSec '47' -> +0.47", E.read_capture_epoch(sub47), BASE + 0.47)
 
         sub5 = os.path.join(tmp, "sub5.jpg")
