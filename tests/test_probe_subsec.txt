@@ -3,26 +3,19 @@ ok   subsec JPEG: DateTimeOriginal
 ok   subsec JPEG: SubSecDateTimeOriginal
 ok   no EXIF: all None
 ok   unreadable file: all None, no raise
-FAIL unreadable file: one log line, none for a readable file with no EXIF: got 2, want 1
+ok   unreadable file: one log line, none for a readable file with no EXIF
 ok   unreadable file: the line names the file and why Pillow failed
 ok   synthetic ARW: Pillow cannot open it
-FAIL synthetic ARW: exifread fallback reads it: got {'DateTimeOriginal': None, 'SubSecTimeOriginal': None, 'SubSecDateTimeOriginal': None}, want {'DateTimeOriginal': '2026:11:07 14:11:44', 'SubSecTimeOriginal': '897', 'SubSecDateTimeOriginal': '2026:11:07 14:11:44.897'}
-FAIL synthetic ARW: SubSec padding stripped: got None, want '89'
-FAIL synthetic ARW: empty SubSec -> None, no combination: got {'DateTimeOriginal': None, 'SubSecTimeOriginal': None, 'SubSecDateTimeOriginal': None}, want {'DateTimeOriginal': '2026:11:07 14:11:44', 'SubSecTimeOriginal': None, 'SubSecDateTimeOriginal': None}
+ok   synthetic ARW: exifread fallback reads it
+ok   synthetic ARW: SubSec padding stripped
+ok   synthetic ARW: empty SubSec -> None, no combination
 ok   exifread not installed: blanks, no raise
 ok   Pillow has date, exifread finds nothing: Pillow's date kept
-FAIL Pillow has date but no SubSec: exifread fills SubSec: got {'DateTimeOriginal': '2026:11:07 14:11:44', 'SubSecTimeOriginal': None, 'SubSecDateTimeOriginal': None}, want {'DateTimeOriginal': '2026:11:07 14:11:44', 'SubSecTimeOriginal': '897', 'SubSecDateTimeOriginal': '2026:11:07 14:11:44.897'}
+ok   Pillow has date but no SubSec: exifread fills SubSec
+ok   exifread raises: blanks, no raise
+ok   format_line: blanks where absent
+all tests passed
 
 --- stderr ---
-20:09:58 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpk2swjlvb/plain.jpg: couldn't read the capture time (exifread: not installed)
-20:09:58 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpk2swjlvb/raw.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpk2swjlvb/raw.arw'; exifread: not installed)
-20:09:58 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpk2swjlvb/padded.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpk2swjlvb/padded.arw'; exifread: not installed)
-20:09:58 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpk2swjlvb/nosub.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpk2swjlvb/nosub.arw'; exifread: not installed)
-20:09:58 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpk2swjlvb/raw.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpk2swjlvb/raw.arw'; exifread: not installed)
-Traceback (most recent call last):
-  File "/Users/louis.davis/Documents/codebases/darktable/darktable-assisted-grouping/python/test_probe_subsec.py", line 170, in <module>
-    run_tests()
-    ~~~~~~~~~^^
-  File "/Users/louis.davis/Documents/codebases/darktable/darktable-assisted-grouping/python/test_probe_subsec.py", line 145, in run_tests
-    import exifread
-ModuleNotFoundError: No module named 'exifread'
+20:57:45 py: C:\Users\Louis\AppData\Local\Temp\tmp0m2cmz4f\raw.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file 'C:\\Users\\Louis\\AppData\\Local\\Temp\\tmp0m2cmz4f\\raw.arw'; exifread: not installed)
+20:57:45 py: C:\Users\Louis\AppData\Local\Temp\tmp0m2cmz4f\raw.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file 'C:\\Users\\Louis\\AppData\\Local\\Temp\\tmp0m2cmz4f\\raw.arw'; exifread: RuntimeError: corrupt RAW)

@@ -116,6 +116,9 @@ ok   verify: one row for the photos a fresh run would change, with Fix = Group S
 ok   verify: the lone frame's reason is its missing Group tag
 ok   verify, Fix: Group Selection ran on those photos
 ok   verify, after Fix: no row, the box hides
+ok   no widget is placed twice in the panel
+ok   Run page: model runs only, main button first
+ok   Tools page: browse, fix by hand, then Undo
 ok   the warning and notice lines sit at the foot of the panel, outside the folding pages
 ok   presets: Rally is stored
 ok   presets: export is offered for a saved preset

@@ -13,7 +13,7 @@ ok   non-digit SubSec '8a' -> CLI whole precision
 ok   DateTimeOriginal 0000:00:00 00:00:00 -> None
 ok   no EXIF -> None
 ok   missing file -> None
-FAIL synthetic ARW via exifread: SubSec '897' -> +0.897: got None, want 1794060704.897
+ok   synthetic ARW via exifread: SubSec '897' -> +0.897
 ok   junk ARW -> None
 ok   CLI exit code
 ok   CLI row count
@@ -30,9 +30,7 @@ ok   CLI exit code
 ok   CLI with cameras: one precision row per camera, sorted, before the overall line
 
 --- stderr ---
-20:09:57 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmp3k7z4qgu/plain.jpg: couldn't read the capture time (exifread: not installed)
-20:09:57 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmp3k7z4qgu/missing.jpg: couldn't read the capture time (Pillow: FileNotFoundError: [Errno 2] No such file or directory: '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmp3k7z4qgu/missing.jpg'; exifread: not installed)
-20:09:57 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmp3k7z4qgu/raw.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmp3k7z4qgu/raw.arw'; exifread: not installed)
-/Users/louis.davis/Documents/codebases/darktable/darktable-assisted-culling/.venv/lib/python3.14/site-packages/PIL/TiffImagePlugin.py:982: UserWarning: Corrupt EXIF data.  Expecting to read 2 bytes but only got 0. 
+20:57:44 py: C:\Users\Louis\AppData\Local\Temp\tmp8zkq2cso\missing.jpg: couldn't read the capture time (Pillow: FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\Louis\\AppData\\Local\\Temp\\tmp8zkq2cso\\missing.jpg'; exifread: FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\Louis\\AppData\\Local\\Temp\\tmp8zkq2cso\\missing.jpg')
+C:\Users\Louis\Pictures\DarkTable\Settings\Plugins\darktable-assisted-grouping\.venv\Lib\site-packages\PIL\TiffImagePlugin.py:982: UserWarning: Corrupt EXIF data.  Expecting to read 2 bytes but only got 0. 
   warnings.warn(str(msg))
-20:09:57 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmp3k7z4qgu/junk.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmp3k7z4qgu/junk.arw'; exifread: not installed)
+20:57:44 py: C:\Users\Louis\AppData\Local\Temp\tmp8zkq2cso\junk.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file 'C:\\Users\\Louis\\AppData\\Local\\Temp\\tmp8zkq2cso\\junk.arw')
