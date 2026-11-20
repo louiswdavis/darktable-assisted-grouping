@@ -38,18 +38,7 @@ local M = {}
 
 M.BURST_GAP_SECONDS = 2
 
-function M.exif_time_to_epoch(s)
-    if not s then return nil end
-    local y, mo, d, h, mi, se = s:match("(%d+):(%d+):(%d+) (%d+):(%d+):(%d+)")
-    -- Before 1970 (a zero date, an old scan) os.time raises on Windows: undated.
-    if not y or tonumber(y) < 1970 then return nil end
-    local ok, epoch = pcall(os.time, {
-        year = tonumber(y), month = tonumber(mo), day = tonumber(d),
-        hour = tonumber(h), min = tonumber(mi), sec = tonumber(se),
-        isdst = false, -- constant offset, so a DST change can't split a burst
-    })
-    return ok and epoch or nil
-end
+M.exif_time_to_epoch = C.exif_time_to_epoch
 
 -- Directory plus filename without its extension; RAW+JPEG pairs and
 -- duplicates (versions of one file) share this key. The stem is compared
@@ -1546,29 +1535,9 @@ local function helper_script()
     return found or (THIS_DIR .. "/../python/exif_times.py")
 end
 
-local function plugin_root(script)
-    local folder = plugin_folder_pref()
-    if folder ~= "" then return folder end
-    local script_dir = (script and script:match("^(.*)[/\\]")) or THIS_DIR
-    return script_dir:match("^(.*)[/\\]python$") or script_dir
-end
+local function plugin_root(script) return C.plugin_root(plugin_folder_pref(), script, THIS_DIR) end
 
-local function python_bin(script)
-    local root = plugin_root(script)
-    local found = first_existing({
-        root .. "/.venv/Scripts/python.exe",
-        root .. "/.venv/bin/python",
-        THIS_DIR .. "/../.venv/Scripts/python.exe",
-        THIS_DIR .. "/../.venv/bin/python",
-    })
-    if found then return found end
-
-    local v = df.check_if_bin_exists(IS_WINDOWS and "python" or "python3")
-    if not v then
-        v = IS_WINDOWS and "python" or "python3"
-    end
-    return v
-end
+local function python_bin(script) return C.python_bin(plugin_root(script), THIS_DIR, IS_WINDOWS, df) end
 
 local command_line, run_async_python = C.command_line, C.run_async_python
 
@@ -1655,13 +1624,7 @@ local function run_next()
     nxt.run()
 end
 
-local function write_rows(path, rows)
-    local f = io.open(path, "w")
-    if not f then return false end
-    for _, r in ipairs(rows) do f:write(M.csv_line(r), "\n") end
-    f:close()
-    return true
-end
+local write_rows = C.write_rows
 
 -- Runs exif_times.py on one file per unit and blocks until it exits. Returns the
 -- results text, or nil plus "cancelled" or a reason the run falls back to whole
@@ -1715,13 +1678,7 @@ end
 
 -- Whether image `id` is still in the library. A get_image error counts as gone, as does a
 -- stale image whose fields can't be read; ledger_prune skips the prune when nothing resolves.
-local function image_exists(id)
-    local ok, name = pcall(function()
-        local img = dt.database.get_image(id)
-        return img and img.filename
-    end)
-    return ok and name ~= nil
-end
+local function image_exists(id) return C.image_exists(dt, id) end
 
 -- Writes the ledger of the tags and native groups this plugin made, first dropping the
 -- rows of images no longer in the library and re-pointing groups whose leader is gone.
