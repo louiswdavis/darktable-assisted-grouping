@@ -2059,11 +2059,11 @@ function M.group_images(images, opts)
             say(string.format("Assisted Grouping: Verify only, nothing changed. %d of %d images differ from a fresh Group Selection run, %d are in a group with no leader inside it.",
                 #fresh_ids, #records, #found.broken))
             if #fresh_ids > 0 then
-                alerts.add(string.format("%d photos differ from a fresh Group Selection run with these settings. Fix runs Group Selection on them.",
+                alerts.add(string.format("%d images differ from a fresh Group Selection run with these settings. Fix runs Group Selection on them.",
                     #fresh_ids), fresh_ids, "group", fresh_why)
             end
             if #found.broken > 0 then
-                alerts.add(string.format("%d photos are in a darktable group whose leader is missing or outside it. Fix makes the group's lowest image its leader.",
+                alerts.add(string.format("%d images are in a darktable group whose leader is missing or outside it. Fix makes the group's lowest image its leader.",
                     #found.broken), found.broken, "leader", broken_why)
             end
             return
@@ -2247,7 +2247,7 @@ function M.clear_marks(images)
                 reached, #plans, w.failed > 0 and (", " .. w.failed .. " marks couldn't be cleared") or "", #plans - reached))
             local unreached = {}
             for i = reached + 1, #order do unreached[#unreached + 1] = order[i] end
-            alerts.add(string.format("Clear cancelled: %d photos not reached keep their marks.", #unreached), unreached)
+            alerts.add(string.format("Clear cancelled: %d images not reached keep their marks.", #unreached), unreached)
         elseif w.failed > 0 then
             notify_error(string.format("Assisted Grouping: Cleared grouping marks from %d images, but %d marks couldn't be cleared (%s). Clear again to retry.",
                 #records, w.failed, w.first_error))
@@ -2506,7 +2506,7 @@ local function install_panel()
     local gap_box
     local start_combo = new_widget("combobox") {
         label = "Start From",
-        tooltip = "Where the groups begin, before page 2 divides them. Default: capture time.\ncapture time: a new group starts when the gap to the previous photo is longer than the burst gap below.\nlast run's groups: each photo's newest Group tag from an earlier run; photos without one share one group. No capture times are read.\none group: every photo starts together, and only the divide layers on page 2 split it.",
+        tooltip = "Where the groups begin, before page 2 divides them. Default: capture time.\ncapture time: a new group starts when the gap to the previous image is longer than the burst gap below.\nlast run's groups: each image's newest Group tag from an earlier run; images without one share one group. No capture times are read.\none group: every image starts together, and only the divide layers on page 2 split it.",
         changed_callback = function(widget)
             local value = M.START_FROM[widget.selected]
             if not value or value == shown_start then return end
@@ -2520,7 +2520,7 @@ local function install_panel()
     start_combo.selected = 1
 
     local gap_entry = new_widget("entry") {
-        tooltip = "Burst gap in seconds: photos taken closer together than this are one burst. Must be above 0. Default: 2. Decimals are allowed (0.5 or 1,5). Lower it when separate bursts end up in one group; raise it when a burst with pauses is split. Type auto to pick the gap from the selection's own timing, between 0.3 and 10 s (the log shows the gap it chose; with under 30 gaps or no clear split, it uses 2).",
+        tooltip = "Burst gap in seconds: images taken closer together than this are one burst. Must be above 0. Default: 2. Decimals are allowed (0.5 or 1,5). Lower it when separate bursts end up in one group; raise it when a burst with pauses is split. Type auto to pick the gap from the selection's own timing, between 0.3 and 10 s (the log shows the gap it chose; with under 30 gaps or no clear split, it uses 2).",
         placeholder = "burst gap (seconds or auto), e.g. 2",
         text = "2",
     }
@@ -2541,12 +2541,12 @@ local function install_panel()
         clicked_callback = function() changed(); refresh_notice() end,
     }
     local tag_entry = new_widget("entry") {
-        tooltip = "Divide each group into photos that carry exactly this tag and photos that don't (child tags don't count). Empty = off. Example: Cars|Red.",
+        tooltip = "Divide each group into images that carry exactly this tag and images that don't (child tags don't count). Empty = off. Example: Cars|Red.",
         placeholder = "tag, e.g. Cars|Red",
         text = "",
     }
     local parent_entry = new_widget("entry") {
-        tooltip = "Divide each group by which tag directly under this node a photo carries. Photos with none, or several, aren't split off: they stay with the group's first part (the log counts them). Empty = off. Example: Cars|Number. Type the Assisted Tagging prefix (e.g. Rally|2026) to split bursts by car number.",
+        tooltip = "Divide each group by which tag directly under this node a image carries. Images with none, or several, aren't split off: they stay with the group's first part (the log counts them). Empty = off. Example: Cars|Number. Type the Assisted Tagging prefix (e.g. Rally|2026) to split bursts by car number.",
         placeholder = "parent tag, e.g. Cars|Number",
         text = "",
     }
@@ -2557,12 +2557,12 @@ local function install_panel()
     }
     local tags_check = new_widget("check_button") {
         label = "Group Tags",
-        tooltip = "Tag each photo with its Group under Assisted Grouping|<run time>|Group|... One tag per final group. Needed for start from last run's groups and for browse as bursts (page 5). Default: off; slower on a large selection.",
+        tooltip = "Tag each image with its Group under Assisted Grouping|<run time>|Group|... One tag per final group. Needed for start from last run's groups and for browse as bursts (page 5). Default: off; slower on a large selection.",
         value = false,
         clicked_callback = function() changed(); refresh_notice() end,
     }
     local session_entry = new_widget("entry") {
-        tooltip = "Sessions: a level above the groups. With a number above 0, each photo with a capture time also gets a Session tag under Assisted Grouping|<run time>|Session|...: a new session starts when the gap to the previous photo is longer than this many minutes. It splits no group. Written only when Group Tags is on. Default: 0 (off). Example: 30.",
+        tooltip = "Sessions: a level above the groups. With a number above 0, each image with a capture time also gets a Session tag under Assisted Grouping|<run time>|Session|...: a new session starts when the gap to the previous image is longer than this many minutes. It splits no group. Written only when Group Tags is on. Default: 0 (off). Example: 30.",
         placeholder = "session gap (minutes), 0 = off",
         text = "0",
     }
@@ -2665,22 +2665,22 @@ local function install_panel()
 
     local group_button = new_widget("button") {
         label = "Group Selection",
-        tooltip = "Group the selected photos with the settings on pages 1 to 3. Cancel from the progress bar: before anything is written it changes nothing, while tags are being written it stops partway (partial tags stay), and once darktable groups have started it is ignored.",
+        tooltip = "Group the selected images with the settings on pages 1 to 3. Cancel from the progress bar: before anything is written it changes nothing, while tags are being written it stops partway (partial tags stay), and once darktable groups have started it is ignored.",
         clicked_callback = function() run_group(copy_images(dt.gui.action_images), false) end,
     }
     local verify_button = new_widget("button") {
         label = "Verify Selection",
-        tooltip = "Check the selected photos against a fresh Group Selection run with the settings on pages 1 to 3, and list what differs in To check. Nothing is written. Photos in a group you made by hand are left out, as Group Selection skips them. Also lists photos in a darktable group with no leader inside it.",
+        tooltip = "Check the selected images against a fresh Group Selection run with the settings on pages 1 to 3, and list what differs in To check. Nothing is written. Images in a group you made by hand are left out, as Group Selection skips them. Also lists images in a darktable group with no leader inside it.",
         clicked_callback = function() run_group(copy_images(dt.gui.action_images), true) end,
     }
     local warning_label = new_widget("label") {
         label = PARTIAL_BURST_WARNING,
         halign = "start",
-        tooltip = "Bursts are grouped from the selected photos only, so selecting part of a burst splits it. Select whole bursts, or the whole shoot.",
+        tooltip = "Bursts are grouped from the selected images only, so selecting part of a burst splits it. Select whole bursts, or the whole shoot.",
     }
     clear_button = new_widget("button") {
         label = "Clear Grouping Marks",
-        tooltip = "Remove the tags (Group, Session and layer trace) and darktable groups this plugin made from the selected photos, with a job bar you can cancel. RAW+JPEG pairs are stacked again. Tags and groups you made by hand stay.",
+        tooltip = "Remove the tags (Group, Session and layer trace) and darktable groups this plugin made from the selected images, with a job bar you can cancel. RAW+JPEG pairs are stacked again. Tags and groups you made by hand stay.",
         clicked_callback = function()
             local images = copy_images(dt.gui.action_images)
             if queue_if_busy("Clear Grouping Marks", #images > 0, function() M.clear_marks(images) end) then return end
@@ -2689,7 +2689,7 @@ local function install_panel()
     }
     local bursts_button = new_widget("button") {
         label = "Bursts",
-        tooltip = "Put the selected photos back into darktable groups from each photo's newest Group tag. Photos without one stay alone, and photos in a group you made by hand are skipped. No capture times are read and no tags are written. Run Group Selection with Group Tags on first.",
+        tooltip = "Put the selected images back into darktable groups from each image's newest Group tag. Images without one stay alone, and images in a group you made by hand are skipped. No capture times are read and no tags are written. Run Group Selection with Group Tags on first.",
         clicked_callback = function()
             local images = copy_images(dt.gui.action_images)
             if queue_if_busy("browse as bursts", #images > 0, function() M.browse_bursts(images) end) then return end
@@ -2698,7 +2698,7 @@ local function install_panel()
     }
     local pairs_button = new_widget("button") {
         label = "Pairs",
-        tooltip = "Take the selected photos, and everything grouped with them, out of their darktable groups, then stack each RAW with its JPEG again, as at import. Hand-made groups are reset too. Group Tags stay, so bursts brings the groups back.",
+        tooltip = "Take the selected images, and everything grouped with them, out of their darktable groups, then stack each RAW with its JPEG again, as at import. Hand-made groups are reset too. Group Tags stay, so bursts brings the groups back.",
         clicked_callback = function()
             local images = copy_images(dt.gui.action_images)
             if queue_if_busy("browse as pairs", #images > 0, function() M.reset_to_pairs(images) end) then return end
@@ -2707,7 +2707,7 @@ local function install_panel()
     }
     local merge_button = new_widget("button") {
         label = "Merge Groups",
-        tooltip = "Join the darktable groups of the selected photos into one, for a burst the run split. The merged group counts as made by hand: Group Selection keeps it and Clear leaves it. Tags stay. pairs takes it apart again.",
+        tooltip = "Join the darktable groups of the selected images into one, for a burst the run split. The merged group counts as made by hand: Group Selection keeps it and Clear leaves it. Tags stay. pairs takes it apart again.",
         clicked_callback = function()
             local images = copy_images(dt.gui.action_images)
             if queue_if_busy("Merge Groups", #images > 0, function() M.merge_groups(images) end) then return end

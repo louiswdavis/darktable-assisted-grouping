@@ -18,7 +18,7 @@ end
 -- plugin_common.lua ---------------------------------------------------------------
 -- The same file in all three plugin repos; COMMON_HASH pins it. After changing it, copy it to the
 -- other two repos and put the hash this prints into their tests too.
-local COMMON_HASH = "4028fb69"
+local COMMON_HASH = "6850b432"
 local PC = dofile(script_dir .. "/plugin_common.lua")
 local function fnv1a(text)
     local h = 2166136261
@@ -29,6 +29,10 @@ local cf = assert(io.open(script_dir .. "/plugin_common.lua", "rb"))
 local common_text = cf:read("a"):gsub("\r\n", "\n")
 cf:close()
 check("plugin_common.lua matches COMMON_HASH (copy it to the other repos after a change)", fnv1a(common_text), COMMON_HASH)
+check("count: 0 is plural", PC.count(0, "image"), "0 images")
+check("count: 1 is singular", PC.count(1, "image"), "1 image")
+check("count: 2 is plural", PC.count(2, "image"), "2 images")
+check("count: an irregular plural", PC.count(2, "entry", "entries"), "2 entries")
 check("shell_quote: Windows escapes quotes, keeps %", PC.shell_quote('C:\\x %y% "z"', true), '"C:\\x %y% \\"z\\""')
 check("shell_quote: POSIX escapes single quotes", PC.shell_quote("a'b", false), "'a'\\''b'")
 check("parse_csv_line: quoted comma and doubled quote", PC.parse_csv_line('1,"a ""x"", b.jpg",3\r', 3)[2], 'a "x", b.jpg')

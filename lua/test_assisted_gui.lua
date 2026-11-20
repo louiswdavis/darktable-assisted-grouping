@@ -164,7 +164,7 @@ package.loaded["lib/dtutils.file"] = {
 
 -- An image as darktable hands it over; `group` is the id of its group leader.
 local function image(id, filename, taken)
-    local img = { id = id, filename = filename, path = "/photos", exif_datetime_taken = taken,
+    local img = { id = id, filename = filename, path = "/images", exif_datetime_taken = taken,
         exif_maker = "Sony", exif_model = "A1", exif_lens = "70-200", tags = {}, group = id }
     function img:get_group_members()
         group_reads = group_reads + 1
@@ -292,8 +292,8 @@ check("group: says it started as soon as it is clicked", prints[1], "Assisted Gr
 check("group: one job bar, named", #jobs == 1 and jobs[1].title, "Assisted Grouping: Group Selection")
 check("group: the job bar is closed", jobs[1] and jobs[1].valid, false)
 check("group: exif_times.py is asked for one file per frame", PYTHON.runs[1] and PYTHON.runs[1].manifest,
-    G.csv_line({ 1, "/photos/DSC00001.JPG" }) .. "\n" .. G.csv_line({ 2, "/photos/DSC00002.JPG" }) .. "\n"
-        .. G.csv_line({ 3, "/photos/DSC00003.JPG" }) .. "\n")
+    G.csv_line({ 1, "/images/DSC00001.JPG" }) .. "\n" .. G.csv_line({ 2, "/images/DSC00002.JPG" }) .. "\n"
+        .. G.csv_line({ 3, "/images/DSC00003.JPG" }) .. "\n")
 check("group: the end toast leads with the outcome",
     last_print():find("Assisted Grouping: Done. 4 images in 2 groups (sub-second timing). Run ", 1, true) ~= nil, true)
 check("group: the burst and the RAW share a darktable group", jpeg2.group == jpeg1.group and raw1.group == jpeg1.group, true)
@@ -480,12 +480,12 @@ to_check = type(to_check) == "table" and to_check[1] and to_check[1][2] and to_c
 local CHECKS_FILE = ROOT .. "/config/assisted_grouping.checks.txt"
 check("To check: the cancelled clear shows in the box", to_check.visible, true)
 check("To check: the row names the action and the count",
-    ((to_check[2][1] or {}).text or ""):gsub("\n", " "), "Clear: Clear cancelled: 39 photos not reached keep their marks.")
+    ((to_check[2][1] or {}).text or ""):gsub("\n", " "), "Clear: Clear cancelled: 39 images not reached keep their marks.")
 check("To check: the item is saved for a restart",
-    (read_file(CHECKS_FILE) or ""):find("Clear\tClear cancelled: 39 photos not reached keep their marks.\t", 1, true) ~= nil, true)
+    (read_file(CHECKS_FILE) or ""):find("Clear\tClear cancelled: 39 images not reached keep their marks.\t", 1, true) ~= nil, true)
 selection_sets = 0
 ;(button(to_check, "Select") or { clicked_callback = function() end }).clicked_callback()
-check("To check: Select selects the photos not reached", selection_sets .. " " .. #dt.gui.action_images, "1 39")
+check("To check: Select selects the images not reached", selection_sets .. " " .. #dt.gui.action_images, "1 39")
 group_writes = 0
 click("Clear Grouping Marks", burst)
 check("clear, after a cancel: the next clear finishes the rest", group_writes, 39)
@@ -539,7 +539,7 @@ check("clear: the burst is split", jpeg2.group ~= jpeg1.group, true)
 check("clear: the RAW is stacked with its JPEG again", raw1.group == jpeg1.group, true)
 
 -- Only the JPEGs selected: the unselected RAW of the first frame is cleared with them.
-local roll = { id = 1, path = "/photos", jpeg1, jpeg2, jpeg3, raw1 }
+local roll = { id = 1, path = "/images", jpeg1, jpeg2, jpeg3, raw1 }
 for _, img in ipairs(roll) do rawset(img, "film", roll) end
 G.group_images(all, { timing = true, gap = 2, camera = false, refine = false, write_tags = true, trace_tags = false, native_groups = true })
 click("Clear Grouping Marks", { jpeg1, jpeg2, jpeg3 })
@@ -560,8 +560,8 @@ jpeg3.group = 999
 group_writes = 0
 click("Verify Selection", { jpeg3 })
 check("verify: says it started", prints[1], "Assisted Grouping: Verify Selection started on 1 image…")
-check("verify, no leader: the row names the photo and the Fix",
-    (read_file(CHECKS_FILE) or ""):find("Verify Selection\t1 photos are in a darktable group whose leader is missing or outside it. Fix makes the group's lowest image its leader.\t3\tleader", 1, true) ~= nil, true)
+check("verify, no leader: the row names the image and the Fix",
+    (read_file(CHECKS_FILE) or ""):find("Verify Selection\t1 images are in a darktable group whose leader is missing or outside it. Fix makes the group's lowest image its leader.\t3\tleader", 1, true) ~= nil, true)
 check("verify, no leader: nothing is written", group_writes, 0)
 ;(button(to_check, "Fix") or { clicked_callback = function() end }).clicked_callback()
 check("verify, no leader: Fix makes the lowest image the leader", jpeg3.group, 3)
@@ -576,12 +576,12 @@ check("verify: writes no group and no tag", string.format("%d %d %s", group_writ
     tostring(ledger_text() == ledger_before)), "0 0 true")
 check("verify: the toast counts what differs", last_print(),
     "Assisted Grouping: Verify only, nothing changed. 4 of 4 images differ from a fresh Group Selection run, 0 are in a group with no leader inside it.")
-check("verify: one row for the photos a fresh run would change, with Fix = Group Selection",
-    (read_file(CHECKS_FILE) or ""):find("Verify Selection\t4 photos differ from a fresh Group Selection run with these settings. Fix runs Group Selection on them.\t", 1, true) ~= nil, true)
+check("verify: one row for the images a fresh run would change, with Fix = Group Selection",
+    (read_file(CHECKS_FILE) or ""):find("Verify Selection\t4 images differ from a fresh Group Selection run with these settings. Fix runs Group Selection on them.\t", 1, true) ~= nil, true)
 check("verify: the lone frame's reason is its missing Group tag",
     (read_file(CHECKS_FILE) or ""):find("DSC00003.JPG: no Group tag", 1, true) ~= nil, true)
 ;(button(to_check, "Fix") or { clicked_callback = function() end }).clicked_callback()
-check("verify, Fix: Group Selection ran on those photos", jpeg2.group == jpeg1.group and group_tag_count(jpeg3), 1)
+check("verify, Fix: Group Selection ran on those images", jpeg2.group == jpeg1.group and group_tag_count(jpeg3), 1)
 click("Verify Selection", all)
 check("verify, after Fix: no row, the box hides", tostring((read_file(CHECKS_FILE) or ""):find("Verify Selection\t", 1, true)) .. " " .. tostring(to_check.visible), "nil false")
 tags_check.value = false
