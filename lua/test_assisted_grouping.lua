@@ -18,7 +18,7 @@ end
 -- plugin_common.lua ---------------------------------------------------------------
 -- The same file in all three plugin repos; COMMON_HASH pins it. After changing it, copy it to the
 -- other two repos and put the hash this prints into their tests too.
-local COMMON_HASH = "8305c0ad"
+local COMMON_HASH = "4d70ce0d"
 local PC = dofile(script_dir .. "/plugin_common.lua")
 local function fnv1a(text)
     local h = 2166136261
@@ -631,7 +631,7 @@ check("plan_verify lists nothing when tags and groups match a fresh run",
     " | broken ")
 
 local split = { tagged(1, 1), tagged(2, 1), tagged(3, 2), tagged(4, 3) }
-check("plan_verify compares Group tags by which frames share them, not by name",
+check("plan_verify compares Group Tags by which frames share them, not by name",
     verify_str(A.plan_verify(A.collapse(split), final, {}, alone(split), { write_tags = true })),
     "1 Group tag differs; 2 Group tag differs; 3 Group tag differs | broken ")
 
@@ -797,16 +797,16 @@ for _, k in ipairs(A.TAG_KINDS) do kinds[k.kind] = true end
 local toggles_ok = true
 for _, t in ipairs(A.TAG_TOGGLES) do if not kinds[t.kind] then toggles_ok = false end end
 check("TAG_TOGGLES: every row has a kind in TAG_KINDS", toggles_ok, true)
-check("NOTICE_TAGS_OFF names Group tags", A.NOTICE_TAGS_OFF,
-    "turn on Group tags, or this run's groups aren't saved for the next run to start from")
+check("NOTICE_TAGS_OFF names Group Tags", A.NOTICE_TAGS_OFF,
+    "turn on Group Tags, or this run's groups aren't saved for the next run to start from")
 
 check("panel_notice: fine is empty", A.panel_notice(panel()), "")
 check("panel_notice: both outputs off", A.panel_notice(panel({ write_tags = false, native_groups = false })), A.ERR_NO_OUTPUT)
 check("panel_notice: bad gap with capture time", A.panel_notice(panel({ gap_text = "abc" })), A.ERR_BAD_GAP)
 check("panel_notice: bad minimum burst size", A.panel_notice(panel({ min_size_text = "1" })), A.ERR_BAD_MIN_SIZE)
 check("panel_notice: bad session gap", A.panel_notice(panel({ session_gap_text = "soon" })), A.ERR_BAD_SESSION_GAP)
-check("panel_notice: session gap with Group tags on is fine", A.panel_notice(panel({ session_gap_text = "30" })), "")
-check("panel_notice: session gap without Group tags",
+check("panel_notice: session gap with Group Tags on is fine", A.panel_notice(panel({ session_gap_text = "30" })), "")
+check("panel_notice: session gap without Group Tags",
     A.panel_notice(panel({ session_gap_text = "30", write_tags = false, native_groups = true })), A.NOTICE_SESSION_TAGS_OFF)
 check("panel_notice: bad gap comes before a bad minimum", A.panel_notice(panel({ gap_text = "abc", min_size_text = "1" })), A.ERR_BAD_GAP)
 check("panel_notice: bad gap ignored with one group", A.panel_notice(panel({ gap_text = "abc", start_from = "one", camera = true })), "")
@@ -1095,7 +1095,7 @@ check("PANEL_PAGES: every preset key is on one page or listed off-stack",
 local page_titles = {}
 for _, p in ipairs(A.PANEL_PAGES) do page_titles[#page_titles + 1] = p.title end
 check("PANEL_PAGES: titles match the README sections", table.concat(page_titles, ","),
-    "start groups,divide groups,output,run,tools")
+    "Start Groups,Divide Groups,Output,Run,Tools")
 
 -- summary --------------------------------------------------------------------
 if failures > 0 then

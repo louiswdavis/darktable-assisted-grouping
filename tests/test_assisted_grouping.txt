@@ -156,7 +156,7 @@ ok   plan_native keeps a leader taken out of a plugin group by hand alone
 ok   plan_native leaves a two-image plugin group split by hand apart
 ok   plan_verify lists every frame of a never-grouped selection
 ok   plan_verify lists nothing when tags and groups match a fresh run
-ok   plan_verify compares Group tags by which frames share them, not by name
+ok   plan_verify compares Group Tags by which frames share them, not by name
 ok   plan_verify leaves out a frame the run skips as hand-made, tags too
 ok   plan_verify lists an image whose darktable group has no leader inside it
 ok   plan_merge joins every image of the selection's groups to the lowest id's group
@@ -220,14 +220,14 @@ ok   upgrade_preset_text: write_tags false has no note
 ok   upgrade_preset_text: trace_tags present is kept
 ok   upgrade_preset_text: undecodable text has no notes
 ok   TAG_TOGGLES: every row has a kind in TAG_KINDS
-ok   NOTICE_TAGS_OFF names Group tags
+ok   NOTICE_TAGS_OFF names Group Tags
 ok   panel_notice: fine is empty
 ok   panel_notice: both outputs off
 ok   panel_notice: bad gap with capture time
 ok   panel_notice: bad minimum burst size
 ok   panel_notice: bad session gap
-ok   panel_notice: session gap with Group tags on is fine
-ok   panel_notice: session gap without Group tags
+ok   panel_notice: session gap with Group Tags on is fine
+ok   panel_notice: session gap without Group Tags
 ok   panel_notice: bad gap comes before a bad minimum
 ok   panel_notice: bad gap ignored with one group
 ok   panel_notice: tags source without write tags

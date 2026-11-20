@@ -867,9 +867,9 @@ function M.plan_native(units, final_of, ledger, members_of)
     return plan
 end
 
--- What Verify selection reports; nothing is written. `fresh` lists the frames a Group selection
+-- What Verify Selection reports; nothing is written. `fresh` lists the frames a Group Selection
 -- run with `opts` would change, as { unit, reasons }, in unit order. Frames the run skips as
--- hand-made (M.plan_native) are left out when native groups are on. Group tags are compared by
+-- hand-made (M.plan_native) are left out when native groups are on. Group Tags are compared by
 -- which frames share each frame's newest one, since every run stamps new names. `broken` is the
 -- sorted ids of images whose darktable group has no leader inside it (`members_of[id].broken`).
 function M.plan_verify(units, final_of, ledger, members_of, opts)
@@ -985,28 +985,28 @@ M.PRESET_SCHEMA = {
 
 -- The panel's pages and the preset keys each page's widgets edit (C.page_coverage checks them).
 M.PANEL_PAGES = {
-    { number = 1, title = "start groups", keys = { "start_from", "burst_gap_seconds", "burst_gap_auto", "min_burst_size" } },
-    { number = 2, title = "divide groups", keys = { "camera", "tag", "parent" } },
-    { number = 3, title = "output", keys = { "native_groups", "write_tags", "trace_tags", "session_gap_minutes" } },
-    { number = 4, title = "run", keys = {} },
-    { number = 5, title = "tools", keys = {} },
+    { number = 1, title = "Start Groups", keys = { "start_from", "burst_gap_seconds", "burst_gap_auto", "min_burst_size" } },
+    { number = 2, title = "Divide Groups", keys = { "camera", "tag", "parent" } },
+    { number = 3, title = "Output", keys = { "native_groups", "write_tags", "trace_tags", "session_gap_minutes" } },
+    { number = 4, title = "Run", keys = {} },
+    { number = 5, title = "Tools", keys = {} },
 }
 M.PANEL_OTHER_KEYS = {}
 
 -- Tag switches by kind, for the tests and the README; the panel places its widgets by hand.
 M.TAG_TOGGLES = {
-    { key = "write_tags", label = "Group tags", kind = "output", writes = { "Group", "Session" } },
-    { key = "trace_tags", label = "Layer trace tags", kind = "diag", writes = { "Burst", "Camera", "Tag", "Parent" } },
+    { key = "write_tags", label = "Group Tags", kind = "output", writes = { "Group", "Session" } },
+    { key = "trace_tags", label = "Layer Trace Tags", kind = "diag", writes = { "Burst", "Camera", "Tag", "Parent" } },
 }
 M.TAG_KINDS = {
-    { kind = "output", label = "outputs" },
-    { kind = "check", label = "checks" },
-    { kind = "diag", label = "how it decided" },
+    { kind = "output", label = "Outputs" },
+    { kind = "check", label = "Checks" },
+    { kind = "diag", label = "How It Decided" },
 }
 M.ERR_NO_LAYER = "turn on at least one divide layer (camera and lens, tag or parent tag), or start from capture time or last run's groups"
-M.NOTICE_TAGS_OFF = "turn on Group tags, or this run's groups aren't saved for the next run to start from"
-M.NOTICE_NO_LAYER = "one group needs a divide layer: turn on Camera and lens, or type a Tag or Parent tag"
-M.NOTICE_SESSION_TAGS_OFF = "turn on Group tags, or no Session tags are written"
+M.NOTICE_TAGS_OFF = "turn on Group Tags, or this run's groups aren't saved for the next run to start from"
+M.NOTICE_NO_LAYER = "one group needs a divide layer: turn on Camera and Lens, or type a Tag or Parent Tag"
+M.NOTICE_SESSION_TAGS_OFF = "turn on Group Tags, or no Session tags are written"
 
 -- Maps the pre-start_from preset keys to a start_from value; refine wins over timing.
 function M.start_from_of(timing, refine)
@@ -1029,7 +1029,7 @@ function M.upgrade_preset_text(text)
     end
     if decoded.trace_tags == nil and decoded.write_tags == true then
         decoded.trace_tags = true
-        notes = { "preset upgraded: trace_tags set from write_tags (Layer trace tags is a separate switch)" }
+        notes = { "preset upgraded: trace_tags set from write_tags (Layer Trace Tags is a separate switch)" }
         changed = true
     end
     if not changed then return text end
@@ -1127,7 +1127,7 @@ function M.plan_partners(records, candidates, ledger)
     return partners
 end
 
--- What Clear grouping marks does to each selected image with a ledger entry:
+-- What Clear Grouping Marks does to each selected image with a ledger entry:
 -- detach = sorted ledger tags still on it, ungroup = whether to take it out of a
 -- native group the plugin made. records = { id, tags = set }; members_of[id] = the
 -- image's current native group members ({ id }). Hand-made tags and groups are
@@ -1193,7 +1193,7 @@ function M.plan_pairs(records)
     return groups
 end
 
--- Merge groups: `groups` are the selected images' native groups as member lists
+-- Merge Groups: `groups` are the selected images' native groups as member lists
 -- ({ id }, with `leader`), repeats allowed. Every image joins the group of the lowest id.
 -- Returns { target = lowest id, join = sorted ids outside the target's group,
 -- ids = all sorted ids, groups = n distinct groups }.
@@ -1512,7 +1512,7 @@ local function notify_error(msg)
     alerts.add((msg:gsub("^Assisted Grouping: ", "")))
 end
 
-local ACTION_NAMES = { group = "Group", verify = "Verify selection", clear = "Clear", pairs = "Reset to pairs", bursts = "Browse as bursts", merge = "Merge groups" }
+local ACTION_NAMES = { group = "Group", verify = "Verify Selection", clear = "Clear", pairs = "Reset to pairs", bursts = "Browse as bursts", merge = "Merge Groups" }
 
 -- `what` names the job in the header: "group", "verify" or "clear". The action's earlier To check items go.
 local function start_log(what, n)
@@ -1947,7 +1947,7 @@ function M.group_images(images, opts)
     local job, run = nil, { ledger = nil, applying = false }
     local run_began = os.time()
     local okr, err = C.logged_call(log, "group selection", function()
-        job = start_job(opts.verify and "Verify selection" or "Group selection", #images, true)
+        job = start_job(opts.verify and "Verify Selection" or "Group Selection", #images, true)
         local records = M.build_images(images, M.needs_tags(opts))
         local units = M.collapse(records)
         local layer_opts = { gap = opts.gap, timing = opts.timing, camera = opts.camera, tag = opts.tag,
@@ -2056,10 +2056,10 @@ function M.group_images(images, opts)
             end
             for _, r in ipairs(records) do filename_of[r.id] = r.filename end
             for _, id in ipairs(found.broken) do broken_why[#broken_why + 1] = filename_of[id] .. ": no leader inside its group" end
-            say(string.format("Assisted Grouping: verify only, nothing changed. %d of %d images differ from a fresh Group selection run, %d are in a group with no leader inside it.",
+            say(string.format("Assisted Grouping: verify only, nothing changed. %d of %d images differ from a fresh Group Selection run, %d are in a group with no leader inside it.",
                 #fresh_ids, #records, #found.broken))
             if #fresh_ids > 0 then
-                alerts.add(string.format("%d photos differ from a fresh Group selection run with these settings. Fix runs Group selection on them.",
+                alerts.add(string.format("%d photos differ from a fresh Group Selection run with these settings. Fix runs Group Selection on them.",
                     #fresh_ids), fresh_ids, "group", fresh_why)
             end
             if #found.broken > 0 then
@@ -2125,7 +2125,7 @@ function M.clear_marks(images)
     start_log("clear", #images)
     local job, ledger, changed = nil, nil, false
     local okr, err = C.logged_call(log, "clearing marks", function()
-        job = start_job("Clear grouping marks", #images, true)
+        job = start_job("Clear Grouping Marks", #images, true)
         ledger = read_ledger()
         local selected, films = {}, {}
         for _, img in ipairs(images) do
@@ -2265,7 +2265,7 @@ end
 
 -- Reset to RAW+JPEG pairs: takes the selection, and everything grouped with it, out
 -- of its darktable groups, then groups each frame's files again (M.plan_pairs).
--- Group tags stay, so the plugin's groups come back with Group selection.
+-- Group Tags stay, so the plugin's groups come back with Group Selection.
 -- Hand-made groups are reset too. The ledger forgets the plugin's native groups here.
 function M.reset_to_pairs(images)
     if busy then
@@ -2370,7 +2370,7 @@ function M.browse_bursts(images)
         start_log("bursts", #records)
         flush_log()
         if next(base_of) == nil then
-            say("Assisted Grouping: nothing to browse. The selection has no group tags; run Group selection with Group tags on first.")
+            say("Assisted Grouping: nothing to browse. The selection has no group tags; run Group Selection with Group Tags on first.")
             return
         end
         local result = M.run_layers(units, { alone = true, base_of = base_of })
@@ -2397,9 +2397,9 @@ function M.browse_bursts(images)
     run_next()
 end
 
--- Merge groups: joins the darktable groups of the selected images into one. The merged
+-- Merge Groups: joins the darktable groups of the selected images into one. The merged
 -- images leave the ledger's native groups (tags stay), so the merge counts as made by
--- hand: Group selection keeps it and Clear leaves it.
+-- hand: Group Selection keeps it and Clear leaves it.
 function M.merge_groups(images)
     if busy then
         dt.print("Assisted Grouping: another job is still running. Wait for it to finish, or cancel it first.")
@@ -2423,7 +2423,7 @@ function M.merge_groups(images)
             say("Assisted Grouping: nothing to merge. Select images from two or more groups.")
             return
         end
-        job = start_job("Merge groups", #plan.join)
+        job = start_job("Merge Groups", #plan.join)
         start_log("merge", #plan.ids)
         flush_log()
         ledger = read_ledger()
@@ -2443,7 +2443,7 @@ function M.merge_groups(images)
             notify_error(string.format("Assisted Grouping: merged %d groups, but %d moves failed (%s). Merge again to retry.",
                 plan.groups, w.failed, w.first_error))
         else
-            say(string.format("Assisted Grouping: merged %d groups into one of %d images. Group selection keeps it.", plan.groups, #plan.ids))
+            say(string.format("Assisted Grouping: merged %d groups into one of %d images. Group Selection keeps it.", plan.groups, #plan.ids))
         end
     end)
 
@@ -2505,7 +2505,7 @@ local function install_panel()
     local shown_start = "time"
     local gap_box
     local start_combo = new_widget("combobox") {
-        label = "start from",
+        label = "Start From",
         tooltip = "Where the groups begin, before page 2 divides them. Default: capture time.\ncapture time: a new group starts when the gap to the previous photo is longer than the burst gap below.\nlast run's groups: each photo's newest Group tag from an earlier run; photos without one share one group. No capture times are read.\none group: every photo starts together, and only the divide layers on page 2 split it.",
         changed_callback = function(widget)
             local value = M.START_FROM[widget.selected]
@@ -2526,7 +2526,7 @@ local function install_panel()
     }
     gap_box = new_widget("box") {
         orientation = "vertical",
-        new_widget("label") { label = "burst gap (seconds)", halign = "start" },
+        new_widget("label") { label = "Burst Gap (Seconds)", halign = "start" },
         gap_entry,
     }
     local min_entry = new_widget("entry") {
@@ -2535,7 +2535,7 @@ local function install_panel()
         text = "2",
     }
     local camera_check = new_widget("check_button") {
-        label = "Camera and lens",
+        label = "Camera and Lens",
         tooltip = "Divide each group by camera maker, model and lens. With start from capture time, each camera is also timed on its own, so one body's frames never join another's burst. Default: off.",
         value = false,
         clicked_callback = function() changed(); refresh_notice() end,
@@ -2551,24 +2551,24 @@ local function install_panel()
         text = "",
     }
     local native_check = new_widget("check_button") {
-        label = "Apply darktable groups",
+        label = "Apply darktable Groups",
         tooltip = "Make one darktable group per final group of two or more images (a lone RAW+JPEG frame counts). Images already in a group you made by hand are skipped. Default: on; the quicker output. Once this step starts, cancel is ignored so no group is left half-built.",
         clicked_callback = function() changed(); refresh_notice() end,
     }
     local tags_check = new_widget("check_button") {
-        label = "Group tags",
+        label = "Group Tags",
         tooltip = "Tag each photo with its Group under Assisted Grouping|<run time>|Group|... One tag per final group. Needed for start from last run's groups and for browse as bursts (page 4). Default: off; slower on a large selection.",
         value = false,
         clicked_callback = function() changed(); refresh_notice() end,
     }
     local session_entry = new_widget("entry") {
-        tooltip = "Sessions: a level above the groups. With a number above 0, each photo with a capture time also gets a Session tag under Assisted Grouping|<run time>|Session|...: a new session starts when the gap to the previous photo is longer than this many minutes. It splits no group. Written only when Group tags is on. Default: 0 (off). Example: 30.",
+        tooltip = "Sessions: a level above the groups. With a number above 0, each photo with a capture time also gets a Session tag under Assisted Grouping|<run time>|Session|...: a new session starts when the gap to the previous photo is longer than this many minutes. It splits no group. Written only when Group Tags is on. Default: 0 (off). Example: 30.",
         placeholder = "session gap (minutes), 0 = off",
         text = "0",
     }
     local trace_check = new_widget("check_button") {
-        label = "Layer trace tags",
-        tooltip = "Also write the Burst, Camera, Tag and Parent tags that show which layer split each group. Each is written only when its layer runs (Burst: start from capture time plus another layer, or a minimum burst size above 2). Written only when Group tags is on. Default: off; slower on a large selection.",
+        label = "Layer Trace Tags",
+        tooltip = "Also write the Burst, Camera, Tag and Parent tags that show which layer split each group. Each is written only when its layer runs (Burst: start from capture time plus another layer, or a minimum burst size above 2). Written only when Group Tags is on. Default: off; slower on a large selection.",
         value = false,
         clicked_callback = function() changed(); refresh_notice() end,
     }
@@ -2648,7 +2648,7 @@ local function install_panel()
         return M.panel_options(panel_state())
     end
 
-    -- Group selection, or Verify selection when `verify`, on `images` with the panel's options.
+    -- Group Selection, or Verify Selection when `verify`, on `images` with the panel's options.
     local function run_group(images, verify)
         refresh_notice()
         local opts, why = read_options()
@@ -2657,20 +2657,20 @@ local function install_panel()
             return
         end
         opts.verify = verify
-        local label = verify and "Verify selection" or "Group selection"
+        local label = verify and "Verify Selection" or "Group Selection"
         if queue_if_busy(label, #images > 0, function() M.group_images(images, opts) end) then return end
         M.group_images(images, opts)
     end
     fixes.group = function(images) run_group(images, false) end
 
     local group_button = new_widget("button") {
-        label = "Group selection",
+        label = "Group Selection",
         tooltip = "Group the selected photos with the settings on pages 1 to 3. Cancel from the progress bar: before anything is written it changes nothing, while tags are being written it stops partway (partial tags stay), and once darktable groups have started it is ignored.",
         clicked_callback = function() run_group(copy_images(dt.gui.action_images), false) end,
     }
     local verify_button = new_widget("button") {
-        label = "Verify selection",
-        tooltip = "Check the selected photos against a fresh Group selection run with the settings on pages 1 to 3, and list what differs in To check. Nothing is written. Photos in a group you made by hand are left out, as Group selection skips them. Also lists photos in a darktable group with no leader inside it.",
+        label = "Verify Selection",
+        tooltip = "Check the selected photos against a fresh Group Selection run with the settings on pages 1 to 3, and list what differs in To check. Nothing is written. Photos in a group you made by hand are left out, as Group Selection skips them. Also lists photos in a darktable group with no leader inside it.",
         clicked_callback = function() run_group(copy_images(dt.gui.action_images), true) end,
     }
     local warning_label = new_widget("label") {
@@ -2679,17 +2679,17 @@ local function install_panel()
         tooltip = "Bursts are grouped from the selected photos only, so selecting part of a burst splits it. Select whole bursts, or the whole shoot.",
     }
     clear_button = new_widget("button") {
-        label = "Clear grouping marks",
+        label = "Clear Grouping Marks",
         tooltip = "Remove the tags (Group, Session and layer trace) and darktable groups this plugin made from the selected photos, with a job bar you can cancel. RAW+JPEG pairs are stacked again. Tags and groups you made by hand stay.",
         clicked_callback = function()
             local images = copy_images(dt.gui.action_images)
-            if queue_if_busy("Clear grouping marks", #images > 0, function() M.clear_marks(images) end) then return end
+            if queue_if_busy("Clear Grouping Marks", #images > 0, function() M.clear_marks(images) end) then return end
             M.clear_marks(images)
         end,
     }
     local bursts_button = new_widget("button") {
-        label = "bursts",
-        tooltip = "Put the selected photos back into darktable groups from each photo's newest Group tag. Photos without one stay alone, and photos in a group you made by hand are skipped. No capture times are read and no tags are written. Run Group selection with Group tags on first.",
+        label = "Bursts",
+        tooltip = "Put the selected photos back into darktable groups from each photo's newest Group tag. Photos without one stay alone, and photos in a group you made by hand are skipped. No capture times are read and no tags are written. Run Group Selection with Group Tags on first.",
         clicked_callback = function()
             local images = copy_images(dt.gui.action_images)
             if queue_if_busy("browse as bursts", #images > 0, function() M.browse_bursts(images) end) then return end
@@ -2697,8 +2697,8 @@ local function install_panel()
         end,
     }
     local pairs_button = new_widget("button") {
-        label = "pairs",
-        tooltip = "Take the selected photos, and everything grouped with them, out of their darktable groups, then stack each RAW with its JPEG again, as at import. Hand-made groups are reset too. Group tags stay, so bursts brings the groups back.",
+        label = "Pairs",
+        tooltip = "Take the selected photos, and everything grouped with them, out of their darktable groups, then stack each RAW with its JPEG again, as at import. Hand-made groups are reset too. Group Tags stay, so bursts brings the groups back.",
         clicked_callback = function()
             local images = copy_images(dt.gui.action_images)
             if queue_if_busy("browse as pairs", #images > 0, function() M.reset_to_pairs(images) end) then return end
@@ -2706,11 +2706,11 @@ local function install_panel()
         end,
     }
     local merge_button = new_widget("button") {
-        label = "Merge groups",
-        tooltip = "Join the darktable groups of the selected photos into one, for a burst the run split. The merged group counts as made by hand: Group selection keeps it and Clear leaves it. Tags stay. pairs takes it apart again.",
+        label = "Merge Groups",
+        tooltip = "Join the darktable groups of the selected photos into one, for a burst the run split. The merged group counts as made by hand: Group Selection keeps it and Clear leaves it. Tags stay. pairs takes it apart again.",
         clicked_callback = function()
             local images = copy_images(dt.gui.action_images)
-            if queue_if_busy("Merge groups", #images > 0, function() M.merge_groups(images) end) then return end
+            if queue_if_busy("Merge Groups", #images > 0, function() M.merge_groups(images) end) then return end
             M.merge_groups(images)
         end,
     }
@@ -2750,40 +2750,40 @@ local function install_panel()
         {
             start_combo,
             gap_box,
-            new_widget("label") { label = "minimum burst size (frames)", halign = "start" },
+            new_widget("label") { label = "Minimum Burst Size (Frames)", halign = "start" },
             min_entry,
         },
         {
             camera_check,
             new_widget("label") { label = "Tag", halign = "start" },
             tag_entry,
-            new_widget("label") { label = "Parent tag", halign = "start" },
+            new_widget("label") { label = "Parent Tag", halign = "start" },
             parent_entry,
         },
         {
-            new_widget("section_label") { label = "outputs" },
+            new_widget("section_label") { label = "Outputs" },
             native_check,
             tags_check,
-            new_widget("label") { label = "session gap (minutes, 0 = off)", halign = "start" },
+            new_widget("label") { label = "Session Gap (Minutes, 0 = Off)", halign = "start" },
             session_entry,
-            new_widget("section_label") { label = "how it decided" },
+            new_widget("section_label") { label = "How It Decided" },
             trace_check,
         },
         {
-            new_widget("section_label") { label = "group (uses pages 1 to 3)" },
+            new_widget("section_label") { label = "Group (Uses Pages 1 to 3)" },
             group_button,
             verify_button,
-            new_widget("section_label") { label = "browse as (darktable groups only; tags kept)" },
+            new_widget("section_label") { label = "Browse As (darktable Groups Only; Tags Kept)" },
             new_widget("box") {
                 orientation = "horizontal",
                 bursts_button,
                 pairs_button,
             },
-            new_widget("section_label") { label = "fix by hand (kept on the next run)" },
+            new_widget("section_label") { label = "Fix by Hand (Kept on the Next Run)" },
             merge_button,
         },
         {
-            new_widget("section_label") { label = "undo" },
+            new_widget("section_label") { label = "Undo" },
             clear_button,
         },
     }

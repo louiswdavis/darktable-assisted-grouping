@@ -20,7 +20,7 @@ ok   minimum 3: the toast counts single frames as groups
 ok   minimum 3: the log counts the groups left apart
 ok   minimum 1: the run refuses
 ok   minimum 1: no job bar
-ok   sessions, Group tags off: no tag is written
+ok   sessions, Group Tags off: no tag is written
 ok   sessions: the burst, its RAW and the later frame get their Session tags
 ok   sessions: each image has its Group and its Session tag
 ok   sessions: the log counts them
@@ -52,7 +52,7 @@ ok   merge: the job bar is closed
 ok   merge: the later frame joins the burst
 ok   merge: reports it
 ok   merge: the ledger no longer counts the group as the plugin's
-ok   merge, then Group selection: the merged group stays
+ok   merge, then Group Selection: the merged group stays
 ok   pairs, large group: says how many images the groups hold
 ok   pairs, large group: every image is rewritten once
 ok   pairs, large group: reports them all
@@ -112,9 +112,9 @@ ok   verify, no leader: Fix makes the lowest image the leader
 ok   verify, after Fix: no row
 ok   verify: writes no group and no tag
 ok   verify: the toast counts what differs
-ok   verify: one row for the photos a fresh run would change, with Fix = Group selection
+ok   verify: one row for the photos a fresh run would change, with Fix = Group Selection
 ok   verify: the lone frame's reason is its missing Group tag
-ok   verify, Fix: Group selection ran on those photos
+ok   verify, Fix: Group Selection ran on those photos
 ok   verify, after Fix: no row, the box hides
 ok   the warning and notice lines sit at the foot of the panel, outside the folding pages
 ok   presets: Rally is stored

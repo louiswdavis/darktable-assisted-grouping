@@ -282,14 +282,14 @@ jpeg2.exif_focal_length, jpeg2.exif_exposure, jpeg2.exif_focus_distance = 200, 0
 local epoch = G.exif_time_to_epoch("2026:05:01 10:00:00")
 PYTHON.results = string.format("1,%d.10\n2,%d.60\n3,%d.00\n#precision,subsecond\n", epoch, epoch, epoch + 30)
 
--- Group selection -------------------------------------------------------------------
-click("Group selection", {})
+-- Group Selection -------------------------------------------------------------------
+click("Group Selection", {})
 check("group, nothing selected: asks for a selection", last_print(), "Assisted Grouping: select some images first")
 check("group, nothing selected: no job bar", #jobs, 0)
 
-click("Group selection", all)
-check("group: says it started as soon as it is clicked", prints[1], "Assisted Grouping: Group selection started on 4 images…")
-check("group: one job bar, named", #jobs == 1 and jobs[1].title, "Assisted Grouping: Group selection")
+click("Group Selection", all)
+check("group: says it started as soon as it is clicked", prints[1], "Assisted Grouping: Group Selection started on 4 images…")
+check("group: one job bar, named", #jobs == 1 and jobs[1].title, "Assisted Grouping: Group Selection")
 check("group: the job bar is closed", jobs[1] and jobs[1].valid, false)
 check("group: exif_times.py is asked for one file per frame", PYTHON.runs[1] and PYTHON.runs[1].manifest,
     G.csv_line({ 1, "/photos/DSC00001.JPG" }) .. "\n" .. G.csv_line({ 2, "/photos/DSC00002.JPG" }) .. "\n"
@@ -312,7 +312,7 @@ check("group: the log lists the focal-length jump inside the burst as a cut hint
 -- Minimum burst size 3: the two-frame burst is left as single frames; the RAW still stacks.
 local min_entry = entry(panel, "minimum burst size (frames), e.g. 2")
 min_entry.text = "3"
-click("Group selection", all)
+click("Group Selection", all)
 check("minimum 3: the two-frame burst is not grouped", jpeg2.group ~= jpeg1.group, true)
 check("minimum 3: the RAW stays stacked with its JPEG", raw1.group, jpeg1.group)
 check("minimum 3: the toast counts single frames as groups",
@@ -320,19 +320,19 @@ check("minimum 3: the toast counts single frames as groups",
 check("minimum 3: the log counts the groups left apart",
     read_file(ROOT .. "/config/assisted_grouping.log"):find("minimum burst size 3: 1 smaller groups left as single frames", 1, true) ~= nil, true)
 min_entry.text = "1"
-click("Group selection", all)
+click("Group Selection", all)
 check("minimum 1: the run refuses", last_print(), "Assisted Grouping: " .. G.ERR_BAD_MIN_SIZE)
 check("minimum 1: no job bar", #jobs, 0)
 min_entry.text = "2"
 
--- Session gap 0.2 minutes with Group tags on: the frame 30 s later starts session 2.
+-- Session gap 0.2 minutes with Group Tags on: the frame 30 s later starts session 2.
 local session_entry = entry(panel, "session gap (minutes), 0 = off")
-local tags_check = check_button(panel, "Group tags")
+local tags_check = check_button(panel, "Group Tags")
 session_entry.text = "0.2"
-click("Group selection", all)
-check("sessions, Group tags off: no tag is written", group_tag_count(jpeg1), 0)
+click("Group Selection", all)
+check("sessions, Group Tags off: no tag is written", group_tag_count(jpeg1), 0)
 tags_check.value = true
-click("Group selection", all)
+click("Group Selection", all)
 local function session_tag(img)
     for _, tag in ipairs(img.tags) do
         local n = tag.name:match("^Assisted Grouping|[^|]+|Session|(%d+)$")
@@ -348,14 +348,14 @@ check("sessions: the log counts them",
 check("sessions: the settings line carries the minimum burst size and the session gap",
     read_file(ROOT .. "/config/assisted_grouping.log"):match("run stamp [^\n]*, (min frames [^,]*, session gap [^,]*),"), "min frames 2, session gap 12.0 s")
 session_entry.text = "0"
-click("Group selection", all)
+click("Group Selection", all)
 check("sessions off again: the Session tags are gone, Group stays", tostring(session_tag(jpeg1)) .. " " .. group_tag_count(jpeg1), "nil 1")
 tags_check.value = false
-click("Clear grouping marks", all)
-click("Group selection", all)
+click("Clear Grouping Marks", all)
+click("Group Selection", all)
 
 PYTHON.exit = 1
-click("Group selection", all)
+click("Group Selection", all)
 check("group, helper failed: still groups, on whole seconds",
     last_print():find("done. 4 images in 2 groups (whole-second timing)", 1, true) ~= nil, true)
 PYTHON.exit = 0
@@ -365,11 +365,11 @@ local function ledger_text()
 end
 tags_check.value = true
 selection_sets = 0
-click("Group selection", all)
+click("Group Selection", all)
 check("group with tags on: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
 check("group with tags on: the ledger has the run's tags",
     group_tag_count(jpeg1) == 1 and ledger_text():find(jpeg1.tags[1].name, 1, true) ~= nil, true)
-click("Clear grouping marks", all)
+click("Clear Grouping Marks", all)
 check("clear after group: it wasn't held up by the last job", printed("another job is still running"), false)
 check("clear after group: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
 check("clear after group: the ledger forgets the cleared tags",
@@ -377,7 +377,7 @@ check("clear after group: the ledger forgets the cleared tags",
 check("group and clear: the selection is never changed", selection_sets, 0)
 tags_check.value = false
 
--- Group tags on, as the panel's checkbox sets it
+-- Group Tags on, as the panel's checkbox sets it
 prints, jobs, PYTHON.runs = {}, {}, {}
 selected_at_attach = {}
 G.group_images(all, { timing = true, gap = 2, camera = false, refine = false, write_tags = true, trace_tags = false, native_groups = true })
@@ -389,7 +389,7 @@ check("group with tags: the burst shares its tag", jpeg1.tags[1] == jpeg2.tags[1
 check("group with tags: the later frame has its own", jpeg3.tags[1] ~= jpeg1.tags[1], true)
 
 -- Browse as pairs -------------------------------------------------------------------
-click("pairs", { jpeg1 })
+click("Pairs", { jpeg1 })
 check("pairs: says it started", prints[1], "Assisted Grouping: Reset to RAW+JPEG pairs started on 1 image…")
 check("pairs: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
 check("pairs: reports the images in the selection's groups", last_print(),
@@ -399,22 +399,22 @@ check("pairs: the next frame is out of the group", jpeg2.group ~= jpeg1.group, t
 check("pairs: tags stay", group_tag_count(jpeg2), 1)
 check("pairs: the job bar reaches the end", jobs[1] and jobs[1].percent, 1.0)
 
--- Merge groups -------------------------------------------------------------------------
-click("Group selection", all)
-click("Merge groups", { jpeg1 })
+-- Merge Groups -------------------------------------------------------------------------
+click("Group Selection", all)
+click("Merge Groups", { jpeg1 })
 check("merge, one group: nothing to merge", last_print(),
     "Assisted Grouping: nothing to merge. Select images from two or more groups.")
 check("merge, one group: no job bar", #jobs, 0)
-click("Merge groups", { jpeg2, jpeg3 })
-check("merge: says it started", prints[1], "Assisted Grouping: Merge groups started on 1 image…")
+click("Merge Groups", { jpeg2, jpeg3 })
+check("merge: says it started", prints[1], "Assisted Grouping: Merge Groups started on 1 image…")
 check("merge: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
 check("merge: the later frame joins the burst", jpeg3.group == jpeg1.group and raw1.group == jpeg1.group, true)
 check("merge: reports it", last_print(),
-    "Assisted Grouping: merged 2 groups into one of 4 images. Group selection keeps it.")
+    "Assisted Grouping: merged 2 groups into one of 4 images. Group Selection keeps it.")
 check("merge: the ledger no longer counts the group as the plugin's", ledger_text():find(",group,", 1, true), nil)
-click("Group selection", all)
-check("merge, then Group selection: the merged group stays", jpeg3.group == jpeg1.group and jpeg2.group == jpeg1.group, true)
-click("pairs", { jpeg1 })
+click("Group Selection", all)
+check("merge, then Group Selection: the merged group stays", jpeg3.group == jpeg1.group and jpeg2.group == jpeg1.group, true)
+click("Pairs", { jpeg1 })
 
 -- A large hand-made group: selecting one frame resets all of it, leader last.
 local stack = {}
@@ -424,7 +424,7 @@ for _, id in ipairs(stack) do
     image(id, string.format("DSC%05d.JPG", id), "2026:05:02 10:00:00").group = 101
 end
 group_writes = 0
-click("pairs", { images_by_id[101] })
+click("Pairs", { images_by_id[101] })
 check("pairs, large group: says how many images the groups hold", printed(
     "Assisted Grouping: the selection's groups hold 40 images; resetting all of them."), true)
 check("pairs, large group: every image is rewritten once", group_writes, 40)
@@ -434,11 +434,11 @@ check("pairs, large group: reports them all", last_print(),
 -- The same 40 frames as one burst: regrouping and clearing take the leader out last too.
 local burst = {}
 for _, id in ipairs(stack) do burst[#burst + 1] = images_by_id[id] end
-click("Group selection", burst)
+click("Group Selection", burst)
 check("group, large burst: one darktable group", images_by_id[140].group, 101)
 check("group, large burst: the job bar reaches the end", jobs[1] and jobs[1].percent, 1.0)
 group_writes, group_reads = 0, 0
-click("Group selection", burst)
+click("Group Selection", burst)
 check("regroup, large burst: a group that already matches is not rewritten", group_writes, 0)
 check("regroup, large burst: the group is read from darktable once", group_reads, 1)
 check("regroup, large burst: the log counts the images left alone",
@@ -447,14 +447,14 @@ check("regroup, large burst: the log counts the images left alone",
         1, true) ~= nil, true)
 burst[#burst + 1] = image(141, "DSC00141.JPG", "2026:05:02 10:00:00")
 group_writes = 0
-click("Group selection", burst)
+click("Group Selection", burst)
 check("regroup, one frame more: 41 detached once each, 40 attached", group_writes, 81)
 check("regroup, one frame more: one darktable group", images_by_id[141].group, 101)
 table.remove(burst)
 images_by_id[141]:group_with()
-click("Group selection", burst)
+click("Group Selection", burst)
 group_writes = 0
-click("Clear grouping marks", burst)
+click("Clear Grouping Marks", burst)
 check("clear, large burst: every image is rewritten once", group_writes, 40)
 check("clear, large burst: the job bar moved", jobs[1] and jobs[1].percent, 0.8)
 check("clear, large burst: the frames are alone again", images_by_id[140].group, 140)
@@ -462,9 +462,9 @@ check("clear, large burst: the log has the timing line", read_file(ROOT .. "/con
     "clear: timing: 40 of 40 images in %d+s; [%d.]+s in darktable calls, [%d.]+s waiting for darktable, [%d.]+s paused, %d+ pauses of 20 ms\n") ~= nil, true)
 
 -- the x on the job bar, clicked during the pause after the first image
-click("Group selection", burst)
+click("Group Selection", burst)
 dt.control.sleep = function() jobs[1].valid = false end
-click("Clear grouping marks", burst)
+click("Clear Grouping Marks", burst)
 dt.control.sleep = function() end
 check("clear, cancelled: says how far it got", last_print(),
     "Assisted Grouping: clear cancelled. Cleared grouping marks from 1 of 40 images; 39 not reached keep their marks.")
@@ -475,8 +475,8 @@ check("clear, cancelled: the job bar is closed", jobs[1].valid, false)
 -- To check: the photos the cancelled clear didn't reach
 local to_check = panel[#panel - 2]
 check("To check sits above the warning lines, outside the folding pages",
-    type(to_check) == "table" and to_check[1] and to_check[1][2] and to_check[1][2].label, "To check")
-to_check = type(to_check) == "table" and to_check[1] and to_check[1][2] and to_check[1][2].label == "To check" and to_check or { {}, {} }
+    type(to_check) == "table" and to_check[1] and to_check[1][2] and to_check[1][2].label, "To Check")
+to_check = type(to_check) == "table" and to_check[1] and to_check[1][2] and to_check[1][2].label == "To Check" and to_check or { {}, {} }
 local CHECKS_FILE = ROOT .. "/config/assisted_grouping.checks.txt"
 check("To check: the cancelled clear shows in the box", to_check.visible, true)
 check("To check: the row names the action and the count",
@@ -487,23 +487,23 @@ selection_sets = 0
 ;(button(to_check, "Select") or { clicked_callback = function() end }).clicked_callback()
 check("To check: Select selects the photos not reached", selection_sets .. " " .. #dt.gui.action_images, "1 39")
 group_writes = 0
-click("Clear grouping marks", burst)
+click("Clear Grouping Marks", burst)
 check("clear, after a cancel: the next clear finishes the rest", group_writes, 39)
 check("clear, after a cancel: the frames are alone again", images_by_id[102].group, 102)
 check("To check: the next clear replaces its items", (read_file(CHECKS_FILE) or ""):find("Clear\t", 1, true), nil)
 check("To check: nothing left, the box hides", to_check.visible, false)
 dt.control.sleep = function() jobs[1].valid = false end
-click("Group selection", burst)
-click("Clear grouping marks", burst)
+click("Group Selection", burst)
+click("Clear Grouping Marks", burst)
 dt.control.sleep = function() end
 check("To check: a second cancelled clear fills the box again", to_check.visible, true)
-;(button(to_check, "Clear list") or { clicked_callback = function() end }).clicked_callback()
+;(button(to_check, "Clear List") or { clicked_callback = function() end }).clicked_callback()
 check("To check: Clear empties the box", to_check.visible, false)
 check("To check: Clear empties the saved list", read_file(CHECKS_FILE), "")
-click("Clear grouping marks", burst)
+click("Clear Grouping Marks", burst)
 
 -- Browse as bursts ------------------------------------------------------------------
-click("bursts", all)
+click("Bursts", all)
 check("bursts: says it started", prints[1], "Assisted Grouping: Browse as bursts started on 4 images…")
 check("bursts: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
 check("bursts: reports the bursts", last_print(), "Assisted Grouping: browsing 4 images as 2 bursts from their group tags.")
@@ -511,18 +511,18 @@ check("bursts: the burst is back in one group", jpeg2.group == jpeg1.group and r
 check("bursts: exif_times.py isn't started", #PYTHON.runs, 0)
 
 local untagged = image(5, "DSC00005.JPG", "2026:05:01 11:00:00")
-click("bursts", { untagged })
+click("Bursts", { untagged })
 check("bursts, no group tags: says what to do", last_print(),
-    "Assisted Grouping: nothing to browse. The selection has no group tags; run Group selection with Group tags on first.")
+    "Assisted Grouping: nothing to browse. The selection has no group tags; run Group Selection with Group Tags on first.")
 
 -- A darktable group change that fails ------------------------------------------------
 group_error = "database is locked"
-click("pairs", { jpeg1 })
+click("Pairs", { jpeg1 })
 check("pairs, darktable refuses: one toast with the count and the cause", last_print(),
     "Assisted Grouping: reset 3 images to 0 RAW+JPEG pairs, but 3 group changes failed (database is locked). Reset again to retry. Tags kept.")
 check("pairs, darktable refuses: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
 selected_at_detach = {}
-click("Clear grouping marks", all)
+click("Clear Grouping Marks", all)
 check("clear: tags were detached", #selected_at_detach > 0, true)
 check("clear: the selection stays while they are detached", math.min(table.unpack(selected_at_detach)), #all)
 check("clear, darktable refuses: one toast with the count and the cause", last_print(),
@@ -530,9 +530,9 @@ check("clear, darktable refuses: one toast with the count and the cause", last_p
 check("clear, darktable refuses: the tags it could detach are gone", group_tag_count(jpeg1), 0)
 group_error = nil
 
--- Clear grouping marks ----------------------------------------------------------------
-click("Clear grouping marks", all)
-check("clear: says it started", prints[1], "Assisted Grouping: Clear grouping marks started on 4 images…")
+-- Clear Grouping Marks ----------------------------------------------------------------
+click("Clear Grouping Marks", all)
+check("clear: says it started", prints[1], "Assisted Grouping: Clear Grouping Marks started on 4 images…")
 check("clear: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
 check("clear retry: reports the images cleared", last_print(), "Assisted Grouping: cleared grouping marks from 3 images.")
 check("clear: the burst is split", jpeg2.group ~= jpeg1.group, true)
@@ -542,50 +542,50 @@ check("clear: the RAW is stacked with its JPEG again", raw1.group == jpeg1.group
 local roll = { id = 1, path = "/photos", jpeg1, jpeg2, jpeg3, raw1 }
 for _, img in ipairs(roll) do rawset(img, "film", roll) end
 G.group_images(all, { timing = true, gap = 2, camera = false, refine = false, write_tags = true, trace_tags = false, native_groups = true })
-click("Clear grouping marks", { jpeg1, jpeg2, jpeg3 })
+click("Clear Grouping Marks", { jpeg1, jpeg2, jpeg3 })
 check("clear, JPEGs only: the toast counts the unselected RAW", last_print(),
     "Assisted Grouping: cleared grouping marks from 4 images, 1 of them unselected RAW/JPEG partners.")
 check("clear, JPEGs only: the RAW's group tag is gone too", group_tag_count(raw1), 0)
 check("clear, JPEGs only: the RAW is stacked with its JPEG again", raw1.group == jpeg1.group and jpeg2.group ~= jpeg1.group, true)
 check("clear, JPEGs only: the ledger forgets the RAW", ledger_text():find('"' .. raw1.id .. '"', 1, true), nil)
 
-click("Clear grouping marks", all)
+click("Clear Grouping Marks", all)
 check("clear, nothing left: says so", last_print(), "Assisted Grouping: nothing to clear; the selection has no grouping marks.")
 check("clear, nothing left: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
 
--- Verify selection ------------------------------------------------------------------
-;(button(to_check, "Clear list") or { clicked_callback = function() end }).clicked_callback()
+-- Verify Selection ------------------------------------------------------------------
+;(button(to_check, "Clear List") or { clicked_callback = function() end }).clicked_callback()
 -- A group whose leader is gone (no image 999): darktable still lists the image in it.
 jpeg3.group = 999
 group_writes = 0
-click("Verify selection", { jpeg3 })
-check("verify: says it started", prints[1], "Assisted Grouping: Verify selection started on 1 image…")
+click("Verify Selection", { jpeg3 })
+check("verify: says it started", prints[1], "Assisted Grouping: Verify Selection started on 1 image…")
 check("verify, no leader: the row names the photo and the Fix",
-    (read_file(CHECKS_FILE) or ""):find("Verify selection\t1 photos are in a darktable group whose leader is missing or outside it. Fix makes the group's lowest image its leader.\t3\tleader", 1, true) ~= nil, true)
+    (read_file(CHECKS_FILE) or ""):find("Verify Selection\t1 photos are in a darktable group whose leader is missing or outside it. Fix makes the group's lowest image its leader.\t3\tleader", 1, true) ~= nil, true)
 check("verify, no leader: nothing is written", group_writes, 0)
 ;(button(to_check, "Fix") or { clicked_callback = function() end }).clicked_callback()
 check("verify, no leader: Fix makes the lowest image the leader", jpeg3.group, 3)
-click("Verify selection", { jpeg3 })
-check("verify, after Fix: no row", (read_file(CHECKS_FILE) or ""):find("Verify selection\t", 1, true), nil)
+click("Verify Selection", { jpeg3 })
+check("verify, after Fix: no row", (read_file(CHECKS_FILE) or ""):find("Verify Selection\t", 1, true), nil)
 
 tags_check.value = true
 local ledger_before = ledger_text()
 group_writes = 0
-click("Verify selection", all)
+click("Verify Selection", all)
 check("verify: writes no group and no tag", string.format("%d %d %s", group_writes, group_tag_count(jpeg1),
     tostring(ledger_text() == ledger_before)), "0 0 true")
 check("verify: the toast counts what differs", last_print(),
-    "Assisted Grouping: verify only, nothing changed. 4 of 4 images differ from a fresh Group selection run, 0 are in a group with no leader inside it.")
-check("verify: one row for the photos a fresh run would change, with Fix = Group selection",
-    (read_file(CHECKS_FILE) or ""):find("Verify selection\t4 photos differ from a fresh Group selection run with these settings. Fix runs Group selection on them.\t", 1, true) ~= nil, true)
+    "Assisted Grouping: verify only, nothing changed. 4 of 4 images differ from a fresh Group Selection run, 0 are in a group with no leader inside it.")
+check("verify: one row for the photos a fresh run would change, with Fix = Group Selection",
+    (read_file(CHECKS_FILE) or ""):find("Verify Selection\t4 photos differ from a fresh Group Selection run with these settings. Fix runs Group Selection on them.\t", 1, true) ~= nil, true)
 check("verify: the lone frame's reason is its missing Group tag",
     (read_file(CHECKS_FILE) or ""):find("DSC00003.JPG: no Group tag", 1, true) ~= nil, true)
 ;(button(to_check, "Fix") or { clicked_callback = function() end }).clicked_callback()
-check("verify, Fix: Group selection ran on those photos", jpeg2.group == jpeg1.group and group_tag_count(jpeg3), 1)
-click("Verify selection", all)
-check("verify, after Fix: no row, the box hides", tostring((read_file(CHECKS_FILE) or ""):find("Verify selection\t", 1, true)) .. " " .. tostring(to_check.visible), "nil false")
+check("verify, Fix: Group Selection ran on those photos", jpeg2.group == jpeg1.group and group_tag_count(jpeg3), 1)
+click("Verify Selection", all)
+check("verify, after Fix: no row, the box hides", tostring((read_file(CHECKS_FILE) or ""):find("Verify Selection\t", 1, true)) .. " " .. tostring(to_check.visible), "nil false")
 tags_check.value = false
-click("Clear grouping marks", all)
+click("Clear Grouping Marks", all)
 
 -- Export and import presets -------------------------------------------------------------
 local function widget_where(widget, kind, field, value)
@@ -613,7 +613,7 @@ local function choose(combo, text)
     return false
 end
 
-local actions = widget_where(panel, "combobox", "label", "actions")
+local actions = widget_where(panel, "combobox", "label", "Actions")
 prints = {}
 choose(actions, "store new preset…")
 entry(panel, "preset name").text = "Rally"
@@ -622,7 +622,7 @@ check("presets: Rally is stored", read_file(ROOT .. "/config/assisted_grouping/p
 local out = ROOT .. "/export"
 make_dir(out)
 check("presets: export is offered for a saved preset", choose(actions, "export preset…"), true)
-widget_where(panel, "file_chooser_button", "title", "folder to export the preset into").value = out
+widget_where(panel, "file_chooser_button", "title", "Folder to Export the Preset Into").value = out
 prints = {}
 button(panel, "Export").clicked_callback()
 check("presets: export toast", last_print(), "Assisted Grouping: preset \"Rally\" exported to " .. out .. "/Rally.atpreset")
@@ -636,13 +636,13 @@ button(panel, "Export").clicked_callback()
 check("presets: a second export into the same folder is refused", last_print():find("already exists", 1, true) ~= nil, true)
 
 check("presets: import is offered", choose(actions, "import preset…"), true)
-widget_where(panel, "file_chooser_button", "title", "preset bundle (.atpreset folder)").value = out .. "/Rally.atpreset"
+widget_where(panel, "file_chooser_button", "title", "Preset Bundle (.atpreset Folder)").value = out .. "/Rally.atpreset"
 prints = {}
 button(panel, "Import").clicked_callback()
 check("presets: import keeps the existing Rally and adds Rally (2)", last_print(),
     "Assisted Grouping: imported \"Rally (2)\" from " .. out .. "/Rally.atpreset (\"Rally\" was taken); pick it in the preset list")
 check("presets: Rally (2) holds the bundle's settings", read_file(ROOT .. "/config/assisted_grouping/presets/Rally (2).json"), saved)
-check("presets: Rally (2) is in the preset list", choose(widget_where(panel, "combobox", "label", "preset"), "Rally (2)"), true)
+check("presets: Rally (2) is in the preset list", choose(widget_where(panel, "combobox", "label", "Preset"), "Rally (2)"), true)
 
 write_file(out .. "/Rally.atpreset/manifest.json",
     '{"version": 1, "plugin": "assisted_culling", "preset": "Rally", "files": "preset.json"}')
