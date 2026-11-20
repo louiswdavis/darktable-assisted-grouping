@@ -959,10 +959,10 @@ function M.parse_session_gap(s)
     return tonumber(t)
 end
 
-M.ERR_NO_OUTPUT = "turn on at least one output (group tags or darktable groups)"
-M.ERR_BAD_GAP = "the burst gap must be auto or a number of seconds above 0, e.g. 2 or 0.5"
-M.ERR_BAD_MIN_SIZE = "the minimum burst size must be a whole number of frames, 2 or more"
-M.ERR_BAD_SESSION_GAP = "the session gap must be a number of minutes, e.g. 30, or 0 for off"
+M.ERR_NO_OUTPUT = "Turn on at least one output (group tags or darktable groups)."
+M.ERR_BAD_GAP = "The burst gap must be auto or a number of seconds above 0, e.g. 2 or 0.5."
+M.ERR_BAD_MIN_SIZE = "The minimum burst size must be a whole number of frames, 2 or more."
+M.ERR_BAD_SESSION_GAP = "The session gap must be a number of minutes, e.g. 30, or 0 for off."
 
 -- Stored start_from values (combobox order) and their panel labels.
 M.START_FROM = { "time", "tags", "one" }
@@ -1003,10 +1003,10 @@ M.TAG_KINDS = {
     { kind = "check", label = "Checks" },
     { kind = "diag", label = "How It Decided" },
 }
-M.ERR_NO_LAYER = "turn on at least one divide layer (camera and lens, tag or parent tag), or start from capture time or last run's groups"
-M.NOTICE_TAGS_OFF = "turn on Group Tags, or this run's groups aren't saved for the next run to start from"
-M.NOTICE_NO_LAYER = "one group needs a divide layer: turn on Camera and Lens, or type a Tag or Parent Tag"
-M.NOTICE_SESSION_TAGS_OFF = "turn on Group Tags, or no Session tags are written"
+M.ERR_NO_LAYER = "Turn on at least one divide layer (camera and lens, tag or parent tag), or start from capture time or last run's groups."
+M.NOTICE_TAGS_OFF = "Turn on Group Tags, or this run's groups aren't saved for the next run to start from."
+M.NOTICE_NO_LAYER = "One group needs a divide layer: turn on Camera and Lens, or type a Tag or Parent Tag."
+M.NOTICE_SESSION_TAGS_OFF = "Turn on Group Tags, or no Session tags are written."
 
 -- Maps the pre-start_from preset keys to a start_from value; refine wins over timing.
 function M.start_from_of(timing, refine)
@@ -1533,7 +1533,7 @@ local function helper_script()
     if folder ~= "" then
         local script = folder .. "/python/exif_times.py"
         if not file_exists(script) then
-            error(string.format("Assisted Grouping: the plugins folder preference gives %s, which has no python/exif_times.py. Point it at the folder holding darktable-assisted-grouping, or clear it to auto-detect.", folder), 0)
+            error(string.format("Assisted Grouping: The plugins folder preference gives %s, which has no python/exif_times.py. Point it at the folder holding darktable-assisted-grouping, or clear it to auto-detect.", folder), 0)
         end
         return script
     end
@@ -1744,7 +1744,7 @@ local function write_ledger(ledger)
     end
     if not ok_w then
         log("ledger: couldn't save " .. LEDGER_PATH .. " after two tries: " .. tostring(err))
-        notify_error(string.format("Assisted Grouping: couldn't save the ledger %s (%s). Tags and groups this run made will count as yours next run.",
+        notify_error(string.format("Assisted Grouping: Couldn't save the ledger %s (%s). Tags and groups this run made will count as yours next run.",
             LEDGER_PATH, tostring(err)))
     end
 end
@@ -1781,7 +1781,7 @@ local function apply_tags(run, records, wanted, job, progress)
         M.set_ledger_tags(ledger, r.id, mine)
         progress(i / #plans)
         if not job.valid then
-            say(string.format("Assisted Grouping: stopped while writing tags; %d of %d images were updated. Run again to finish.",
+            say(string.format("Assisted Grouping: Stopped while writing tags; %d of %d images were updated. Run again to finish.",
                 i, #records))
             return false
         end
@@ -1790,7 +1790,7 @@ local function apply_tags(run, records, wanted, job, progress)
     log(string.format("tags: timing: %.1fs in tag calls (database, undo, sidecar), %d pauses of %d ms",
         w.call_s, w.sleeps, WRITE_SLEEP_MS))
     if w.failed > 0 then
-        notify_error(string.format("Assisted Grouping: couldn't write tags on %d images: %s", w.failed, w.first_error))
+        notify_error(string.format("Assisted Grouping: Couldn't write tags on %d images: %s", w.failed, w.first_error))
     end
     return true
 end
@@ -1912,10 +1912,10 @@ local function finish_job(job, ledger)
     local ok_j, err_j = pcall(end_job, job)
     busy = false
     if not ok_l then
-        notify_error("Assisted Grouping: couldn't save the ledger: " .. tostring(err_l)
+        notify_error("Assisted Grouping: Couldn't save the ledger: " .. tostring(err_l)
             .. ". Tags and groups this run made will count as yours next run.")
     end
-    if not ok_j then notify_error("Assisted Grouping: couldn't close the job bar: " .. tostring(err_j)) end
+    if not ok_j then notify_error("Assisted Grouping: Couldn't close the job bar: " .. tostring(err_j)) end
 end
 
 -- opts = { timing, gap, min_frames, session_gap, camera, tag, parent, refine, write_tags, trace_tags,
@@ -1923,7 +1923,7 @@ end
 -- puts what a real run would change in To check (M.plan_verify).
 function M.group_images(images, opts)
     if busy then
-        dt.print("Assisted Grouping: another job is still running. Wait for it to finish, or cancel it first.")
+        dt.print("Assisted Grouping: Another job is still running. Wait for it to finish, or cancel it first.")
         return
     end
     if not opts.write_tags and not opts.native_groups then
@@ -1931,7 +1931,7 @@ function M.group_images(images, opts)
         return
     end
     if not images or #images == 0 then
-        dt.print("Assisted Grouping: select some images first")
+        dt.print("Assisted Grouping: Select some images first.")
         return
     end
     local stamp
@@ -1966,7 +1966,7 @@ function M.group_images(images, opts)
             local text, why = read_helper_times(to_time, opts.camera, job)
             flush_log()
             if why == "cancelled" then
-                say("Assisted Grouping: cancelled, nothing was changed.")
+                say("Assisted Grouping: Cancelled, nothing was changed.")
                 return
             end
             local reason = why
@@ -2043,7 +2043,7 @@ function M.group_images(images, opts)
 
         -- Groups need the whole selection, so a cancelled run writes nothing.
         if cancelled(job) then
-            say("Assisted Grouping: cancelled, nothing was changed.")
+            say("Assisted Grouping: Cancelled, nothing was changed.")
             return
         end
         if opts.verify then
@@ -2056,7 +2056,7 @@ function M.group_images(images, opts)
             end
             for _, r in ipairs(records) do filename_of[r.id] = r.filename end
             for _, id in ipairs(found.broken) do broken_why[#broken_why + 1] = filename_of[id] .. ": no leader inside its group" end
-            say(string.format("Assisted Grouping: verify only, nothing changed. %d of %d images differ from a fresh Group Selection run, %d are in a group with no leader inside it.",
+            say(string.format("Assisted Grouping: Verify only, nothing changed. %d of %d images differ from a fresh Group Selection run, %d are in a group with no leader inside it.",
                 #fresh_ids, #records, #found.broken))
             if #fresh_ids > 0 then
                 alerts.add(string.format("%d photos differ from a fresh Group Selection run with these settings. Fix runs Group Selection on them.",
@@ -2094,14 +2094,14 @@ function M.group_images(images, opts)
                 counts.grouped, counts.unchanged, counts.skipped))
             log(string.format("native groups: done, %ds", os.time() - native_began))
         end
-        say(string.format("Assisted Grouping: done. %d images in %d groups (%s). Run %s.%s",
+        say(string.format("Assisted Grouping: Done. %d images in %d groups (%s). Run %s.%s",
             #records, count_groups(result.final_of), timing_label, stamp, note))
     end)
 
     -- Saved once anything may have changed, even if the apply stopped or errored partway,
     -- so what this run made isn't mistaken for the user's next time.
     finish_job(job, run.applying and run.ledger or nil)
-    if not okr then notify_error("Assisted Grouping: couldn't run. " .. tostring(err)) end
+    if not okr then notify_error("Assisted Grouping: Couldn't run. " .. tostring(err)) end
     log(string.format("run finished, %ds in total", os.time() - run_began))
     flush_log()
     run_next()
@@ -2113,11 +2113,11 @@ end
 -- write that fails keeps its part of the row, so clearing again retries it.
 function M.clear_marks(images)
     if busy then
-        dt.print("Assisted Grouping: another job is still running. Wait for it to finish, or cancel it first.")
+        dt.print("Assisted Grouping: Another job is still running. Wait for it to finish, or cancel it first.")
         return
     end
     if not images or #images == 0 then
-        dt.print("Assisted Grouping: select some images first")
+        dt.print("Assisted Grouping: Select some images first.")
         return
     end
     busy = true
@@ -2156,7 +2156,7 @@ function M.clear_marks(images)
         end
         if #partners > 0 then log(string.format("clear: %d unselected RAW/JPEG partners of the selection included", #partners)) end
         if #records == 0 then
-            say("Assisted Grouping: nothing to clear; the selection has no grouping marks.")
+            say("Assisted Grouping: Nothing to clear; the selection has no grouping marks.")
             return
         end
 
@@ -2243,22 +2243,22 @@ function M.clear_marks(images)
             reached, #plans, os.time() - started, w.call_s, wait_s, pause_s, w.sleeps, WRITE_SLEEP_MS,
             stopped and ", stopped at the job bar" or ""))
         if stopped then
-            say(string.format("Assisted Grouping: clear cancelled. Cleared grouping marks from %d of %d images%s; %d not reached keep their marks.",
+            say(string.format("Assisted Grouping: Clear cancelled. Cleared grouping marks from %d of %d images%s; %d not reached keep their marks.",
                 reached, #plans, w.failed > 0 and (", " .. w.failed .. " marks couldn't be cleared") or "", #plans - reached))
             local unreached = {}
             for i = reached + 1, #order do unreached[#unreached + 1] = order[i] end
-            alerts.add(string.format("clear cancelled: %d photos not reached keep their marks", #unreached), unreached)
+            alerts.add(string.format("Clear cancelled: %d photos not reached keep their marks.", #unreached), unreached)
         elseif w.failed > 0 then
-            notify_error(string.format("Assisted Grouping: cleared grouping marks from %d images, but %d marks couldn't be cleared (%s). Clear again to retry.",
+            notify_error(string.format("Assisted Grouping: Cleared grouping marks from %d images, but %d marks couldn't be cleared (%s). Clear again to retry.",
                 #records, w.failed, w.first_error))
         else
-            say(string.format("Assisted Grouping: cleared grouping marks from %d images%s.", #records,
+            say(string.format("Assisted Grouping: Cleared grouping marks from %d images%s.", #records,
                 #partners > 0 and string.format(", %d of them unselected RAW/JPEG partners", #partners) or ""))
         end
     end)
 
     finish_job(job, changed and ledger or nil)
-    if not okr then notify_error("Assisted Grouping: clearing marks failed. " .. tostring(err)) end
+    if not okr then notify_error("Assisted Grouping: Clearing marks failed. " .. tostring(err)) end
     flush_log()
     run_next()
 end
@@ -2269,11 +2269,11 @@ end
 -- Hand-made groups are reset too. The ledger forgets the plugin's native groups here.
 function M.reset_to_pairs(images)
     if busy then
-        dt.print("Assisted Grouping: another job is still running. Wait for it to finish, or cancel it first.")
+        dt.print("Assisted Grouping: Another job is still running. Wait for it to finish, or cancel it first.")
         return
     end
     if not images or #images == 0 then
-        dt.print("Assisted Grouping: select some images first")
+        dt.print("Assisted Grouping: Select some images first.")
         return
     end
     busy = true
@@ -2291,7 +2291,7 @@ function M.reset_to_pairs(images)
         end
         start_log("pairs", #records)
         if #records > #images then
-            say(string.format("Assisted Grouping: the selection's groups hold %d images; resetting all of them.", #records))
+            say(string.format("Assisted Grouping: The selection's groups hold %d images; resetting all of them.", #records))
         end
         flush_log()
         ledger = read_ledger()
@@ -2335,15 +2335,15 @@ function M.reset_to_pairs(images)
             #records, n_pairs, w.failed))
         log(string.format("pairs: timing: %.1fs in darktable calls, %d pauses of %d ms", w.call_s, w.sleeps, WRITE_SLEEP_MS))
         if w.failed > 0 then
-            notify_error(string.format("Assisted Grouping: reset %d images to %d RAW+JPEG pairs, but %d group changes failed (%s). Reset again to retry. Tags kept.",
+            notify_error(string.format("Assisted Grouping: Reset %d images to %d RAW+JPEG pairs, but %d group changes failed (%s). Reset again to retry. Tags kept.",
                 #records, n_pairs, w.failed, w.first_error))
         else
-            say(string.format("Assisted Grouping: reset %d images to %d RAW+JPEG pairs. Tags kept.", #records, n_pairs))
+            say(string.format("Assisted Grouping: Reset %d images to %d RAW+JPEG pairs. Tags kept.", #records, n_pairs))
         end
     end)
 
     finish_job(job, changed and ledger or nil)
-    if not okr then notify_error("Assisted Grouping: reset to pairs failed. " .. tostring(err)) end
+    if not okr then notify_error("Assisted Grouping: Reset to pairs failed. " .. tostring(err)) end
     flush_log()
     run_next()
 end
@@ -2353,11 +2353,11 @@ end
 -- timed and no tags are written.
 function M.browse_bursts(images)
     if busy then
-        dt.print("Assisted Grouping: another job is still running. Wait for it to finish, or cancel it first.")
+        dt.print("Assisted Grouping: Another job is still running. Wait for it to finish, or cancel it first.")
         return
     end
     if not images or #images == 0 then
-        dt.print("Assisted Grouping: select some images first")
+        dt.print("Assisted Grouping: Select some images first.")
         return
     end
     busy = true
@@ -2370,7 +2370,7 @@ function M.browse_bursts(images)
         start_log("bursts", #records)
         flush_log()
         if next(base_of) == nil then
-            say("Assisted Grouping: nothing to browse. The selection has no group tags; run Group Selection with Group Tags on first.")
+            say("Assisted Grouping: Nothing to browse. The selection has no group tags; run Group Selection with Group Tags on first.")
             return
         end
         local result = M.run_layers(units, { alone = true, base_of = base_of })
@@ -2385,14 +2385,14 @@ function M.browse_bursts(images)
         end)
         log(string.format("bursts: %d images in %d groups, %d frames without a group tag, %d skipped (already in a hand-made group)",
             #records, count_groups(result.final_of), untagged, counts.skipped))
-        local msg = string.format("Assisted Grouping: browsing %d images as %d bursts from their group tags.",
+        local msg = string.format("Assisted Grouping: Browsing %d images as %d bursts from their group tags.",
             #records, count_groups(result.final_of))
         if untagged > 0 then msg = msg .. string.format(" %d frames have no group tag and stay alone.", untagged) end
         say(msg)
     end)
 
     finish_job(job, changed and ledger or nil)
-    if not okr then notify_error("Assisted Grouping: browse as bursts failed. " .. tostring(err)) end
+    if not okr then notify_error("Assisted Grouping: Browse as bursts failed. " .. tostring(err)) end
     flush_log()
     run_next()
 end
@@ -2402,11 +2402,11 @@ end
 -- hand: Group Selection keeps it and Clear leaves it.
 function M.merge_groups(images)
     if busy then
-        dt.print("Assisted Grouping: another job is still running. Wait for it to finish, or cancel it first.")
+        dt.print("Assisted Grouping: Another job is still running. Wait for it to finish, or cancel it first.")
         return
     end
     if not images or #images == 0 then
-        dt.print("Assisted Grouping: select some images first")
+        dt.print("Assisted Grouping: Select some images first.")
         return
     end
     busy = true
@@ -2420,7 +2420,7 @@ function M.merge_groups(images)
         end
         local plan = M.plan_merge(groups)
         if plan.groups < 2 then
-            say("Assisted Grouping: nothing to merge. Select images from two or more groups.")
+            say("Assisted Grouping: Nothing to merge. Select images from two or more groups.")
             return
         end
         job = start_job("Merge Groups", #plan.join)
@@ -2440,15 +2440,15 @@ function M.merge_groups(images)
         end
         log(string.format("merge: %d groups, %d images, %d moved, %d failed", plan.groups, #plan.ids, #plan.join, w.failed))
         if w.failed > 0 then
-            notify_error(string.format("Assisted Grouping: merged %d groups, but %d moves failed (%s). Merge again to retry.",
+            notify_error(string.format("Assisted Grouping: Merged %d groups, but %d moves failed (%s). Merge again to retry.",
                 plan.groups, w.failed, w.first_error))
         else
-            say(string.format("Assisted Grouping: merged %d groups into one of %d images. Group Selection keeps it.", plan.groups, #plan.ids))
+            say(string.format("Assisted Grouping: Merged %d groups into one of %d images. Group Selection keeps it.", plan.groups, #plan.ids))
         end
     end)
 
     finish_job(job, changed and ledger or nil)
-    if not okr then notify_error("Assisted Grouping: merge groups failed. " .. tostring(err)) end
+    if not okr then notify_error("Assisted Grouping: Merge groups failed. " .. tostring(err)) end
     flush_log()
     run_next()
 end
@@ -2486,8 +2486,8 @@ local function copy_images(images)
     return out
 end
 
--- Culling's partial-burst warning. GTK labels here don't wrap, so the lines are broken by hand.
-local PARTIAL_BURST_WARNING = "Select whole bursts ?"
+-- The partial-burst warning, shown permanently under the run buttons.
+local PARTIAL_BURST_WARNING = "Select whole bursts, or the whole shoot."
 
 local function install_panel()
     if M.module_installed then return end

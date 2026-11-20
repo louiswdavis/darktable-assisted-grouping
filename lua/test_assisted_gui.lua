@@ -284,7 +284,7 @@ PYTHON.results = string.format("1,%d.10\n2,%d.60\n3,%d.00\n#precision,subsecond\
 
 -- Group Selection -------------------------------------------------------------------
 click("Group Selection", {})
-check("group, nothing selected: asks for a selection", last_print(), "Assisted Grouping: select some images first")
+check("group, nothing selected: asks for a selection", last_print(), "Assisted Grouping: Select some images first.")
 check("group, nothing selected: no job bar", #jobs, 0)
 
 click("Group Selection", all)
@@ -295,7 +295,7 @@ check("group: exif_times.py is asked for one file per frame", PYTHON.runs[1] and
     G.csv_line({ 1, "/photos/DSC00001.JPG" }) .. "\n" .. G.csv_line({ 2, "/photos/DSC00002.JPG" }) .. "\n"
         .. G.csv_line({ 3, "/photos/DSC00003.JPG" }) .. "\n")
 check("group: the end toast leads with the outcome",
-    last_print():find("Assisted Grouping: done. 4 images in 2 groups (sub-second timing). Run ", 1, true) ~= nil, true)
+    last_print():find("Assisted Grouping: Done. 4 images in 2 groups (sub-second timing). Run ", 1, true) ~= nil, true)
 check("group: the burst and the RAW share a darktable group", jpeg2.group == jpeg1.group and raw1.group == jpeg1.group, true)
 check("group: the later frame stays alone", jpeg3.group ~= jpeg1.group, true)
 check("group, tags off: no tag is written", group_tag_count(jpeg1), 0)
@@ -316,7 +316,7 @@ click("Group Selection", all)
 check("minimum 3: the two-frame burst is not grouped", jpeg2.group ~= jpeg1.group, true)
 check("minimum 3: the RAW stays stacked with its JPEG", raw1.group, jpeg1.group)
 check("minimum 3: the toast counts single frames as groups",
-    last_print():find("done. 4 images in 3 groups (sub-second timing)", 1, true) ~= nil, true)
+    last_print():find("Done. 4 images in 3 groups (sub-second timing)", 1, true) ~= nil, true)
 check("minimum 3: the log counts the groups left apart",
     read_file(ROOT .. "/config/assisted_grouping.log"):find("minimum burst size 3: 1 smaller groups left as single frames", 1, true) ~= nil, true)
 min_entry.text = "1"
@@ -357,7 +357,7 @@ click("Group Selection", all)
 PYTHON.exit = 1
 click("Group Selection", all)
 check("group, helper failed: still groups, on whole seconds",
-    last_print():find("done. 4 images in 2 groups (whole-second timing)", 1, true) ~= nil, true)
+    last_print():find("Done. 4 images in 2 groups (whole-second timing)", 1, true) ~= nil, true)
 PYTHON.exit = 0
 
 local function ledger_text()
@@ -370,7 +370,7 @@ check("group with tags on: the job bar is closed", #jobs == 1 and jobs[1].valid,
 check("group with tags on: the ledger has the run's tags",
     group_tag_count(jpeg1) == 1 and ledger_text():find(jpeg1.tags[1].name, 1, true) ~= nil, true)
 click("Clear Grouping Marks", all)
-check("clear after group: it wasn't held up by the last job", printed("another job is still running"), false)
+check("clear after group: it wasn't held up by the last job", printed("Another job is still running"), false)
 check("clear after group: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
 check("clear after group: the ledger forgets the cleared tags",
     group_tag_count(jpeg1) == 0 and ledger_text():find("Assisted Grouping|", 1, true) == nil, true)
@@ -393,7 +393,7 @@ click("Pairs", { jpeg1 })
 check("pairs: says it started", prints[1], "Assisted Grouping: Reset to RAW+JPEG pairs started on 1 image…")
 check("pairs: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
 check("pairs: reports the images in the selection's groups", last_print(),
-    "Assisted Grouping: reset 3 images to 1 RAW+JPEG pairs. Tags kept.")
+    "Assisted Grouping: Reset 3 images to 1 RAW+JPEG pairs. Tags kept.")
 check("pairs: the RAW is stacked with its JPEG", raw1.group == jpeg1.group, true)
 check("pairs: the next frame is out of the group", jpeg2.group ~= jpeg1.group, true)
 check("pairs: tags stay", group_tag_count(jpeg2), 1)
@@ -403,14 +403,14 @@ check("pairs: the job bar reaches the end", jobs[1] and jobs[1].percent, 1.0)
 click("Group Selection", all)
 click("Merge Groups", { jpeg1 })
 check("merge, one group: nothing to merge", last_print(),
-    "Assisted Grouping: nothing to merge. Select images from two or more groups.")
+    "Assisted Grouping: Nothing to merge. Select images from two or more groups.")
 check("merge, one group: no job bar", #jobs, 0)
 click("Merge Groups", { jpeg2, jpeg3 })
 check("merge: says it started", prints[1], "Assisted Grouping: Merge Groups started on 1 image…")
 check("merge: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
 check("merge: the later frame joins the burst", jpeg3.group == jpeg1.group and raw1.group == jpeg1.group, true)
 check("merge: reports it", last_print(),
-    "Assisted Grouping: merged 2 groups into one of 4 images. Group Selection keeps it.")
+    "Assisted Grouping: Merged 2 groups into one of 4 images. Group Selection keeps it.")
 check("merge: the ledger no longer counts the group as the plugin's", ledger_text():find(",group,", 1, true), nil)
 click("Group Selection", all)
 check("merge, then Group Selection: the merged group stays", jpeg3.group == jpeg1.group and jpeg2.group == jpeg1.group, true)
@@ -426,10 +426,10 @@ end
 group_writes = 0
 click("Pairs", { images_by_id[101] })
 check("pairs, large group: says how many images the groups hold", printed(
-    "Assisted Grouping: the selection's groups hold 40 images; resetting all of them."), true)
+    "Assisted Grouping: The selection's groups hold 40 images; resetting all of them."), true)
 check("pairs, large group: every image is rewritten once", group_writes, 40)
 check("pairs, large group: reports them all", last_print(),
-    "Assisted Grouping: reset 40 images to 0 RAW+JPEG pairs. Tags kept.")
+    "Assisted Grouping: Reset 40 images to 0 RAW+JPEG pairs. Tags kept.")
 
 -- The same 40 frames as one burst: regrouping and clearing take the leader out last too.
 local burst = {}
@@ -467,7 +467,7 @@ dt.control.sleep = function() jobs[1].valid = false end
 click("Clear Grouping Marks", burst)
 dt.control.sleep = function() end
 check("clear, cancelled: says how far it got", last_print(),
-    "Assisted Grouping: clear cancelled. Cleared grouping marks from 1 of 40 images; 39 not reached keep their marks.")
+    "Assisted Grouping: Clear cancelled. Cleared grouping marks from 1 of 40 images; 39 not reached keep their marks.")
 check("clear, cancelled: the first frame is alone, the ones not reached stay grouped",
     images_by_id[102].group .. " " .. images_by_id[103].group .. " " .. images_by_id[140].group, "102 101 101")
 check("clear, cancelled: the job bar is closed", jobs[1].valid, false)
@@ -480,9 +480,9 @@ to_check = type(to_check) == "table" and to_check[1] and to_check[1][2] and to_c
 local CHECKS_FILE = ROOT .. "/config/assisted_grouping.checks.txt"
 check("To check: the cancelled clear shows in the box", to_check.visible, true)
 check("To check: the row names the action and the count",
-    ((to_check[2][1] or {}).text or ""):gsub("\n", " "), "Clear: clear cancelled: 39 photos not reached keep their marks")
+    ((to_check[2][1] or {}).text or ""):gsub("\n", " "), "Clear: Clear cancelled: 39 photos not reached keep their marks.")
 check("To check: the item is saved for a restart",
-    (read_file(CHECKS_FILE) or ""):find("Clear\tclear cancelled: 39 photos not reached keep their marks\t", 1, true) ~= nil, true)
+    (read_file(CHECKS_FILE) or ""):find("Clear\tClear cancelled: 39 photos not reached keep their marks.\t", 1, true) ~= nil, true)
 selection_sets = 0
 ;(button(to_check, "Select") or { clicked_callback = function() end }).clicked_callback()
 check("To check: Select selects the photos not reached", selection_sets .. " " .. #dt.gui.action_images, "1 39")
@@ -506,27 +506,27 @@ click("Clear Grouping Marks", burst)
 click("Bursts", all)
 check("bursts: says it started", prints[1], "Assisted Grouping: Browse as bursts started on 4 images…")
 check("bursts: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
-check("bursts: reports the bursts", last_print(), "Assisted Grouping: browsing 4 images as 2 bursts from their group tags.")
+check("bursts: reports the bursts", last_print(), "Assisted Grouping: Browsing 4 images as 2 bursts from their group tags.")
 check("bursts: the burst is back in one group", jpeg2.group == jpeg1.group and raw1.group == jpeg1.group, true)
 check("bursts: exif_times.py isn't started", #PYTHON.runs, 0)
 
 local untagged = image(5, "DSC00005.JPG", "2026:05:01 11:00:00")
 click("Bursts", { untagged })
 check("bursts, no group tags: says what to do", last_print(),
-    "Assisted Grouping: nothing to browse. The selection has no group tags; run Group Selection with Group Tags on first.")
+    "Assisted Grouping: Nothing to browse. The selection has no group tags; run Group Selection with Group Tags on first.")
 
 -- A darktable group change that fails ------------------------------------------------
 group_error = "database is locked"
 click("Pairs", { jpeg1 })
 check("pairs, darktable refuses: one toast with the count and the cause", last_print(),
-    "Assisted Grouping: reset 3 images to 0 RAW+JPEG pairs, but 3 group changes failed (database is locked). Reset again to retry. Tags kept.")
+    "Assisted Grouping: Reset 3 images to 0 RAW+JPEG pairs, but 3 group changes failed (database is locked). Reset again to retry. Tags kept.")
 check("pairs, darktable refuses: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
 selected_at_detach = {}
 click("Clear Grouping Marks", all)
 check("clear: tags were detached", #selected_at_detach > 0, true)
 check("clear: the selection stays while they are detached", math.min(table.unpack(selected_at_detach)), #all)
 check("clear, darktable refuses: one toast with the count and the cause", last_print(),
-    "Assisted Grouping: cleared grouping marks from 4 images, but 3 marks couldn't be cleared (database is locked). Clear again to retry.")
+    "Assisted Grouping: Cleared grouping marks from 4 images, but 3 marks couldn't be cleared (database is locked). Clear again to retry.")
 check("clear, darktable refuses: the tags it could detach are gone", group_tag_count(jpeg1), 0)
 group_error = nil
 
@@ -534,7 +534,7 @@ group_error = nil
 click("Clear Grouping Marks", all)
 check("clear: says it started", prints[1], "Assisted Grouping: Clear Grouping Marks started on 4 images…")
 check("clear: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
-check("clear retry: reports the images cleared", last_print(), "Assisted Grouping: cleared grouping marks from 3 images.")
+check("clear retry: reports the images cleared", last_print(), "Assisted Grouping: Cleared grouping marks from 3 images.")
 check("clear: the burst is split", jpeg2.group ~= jpeg1.group, true)
 check("clear: the RAW is stacked with its JPEG again", raw1.group == jpeg1.group, true)
 
@@ -544,13 +544,13 @@ for _, img in ipairs(roll) do rawset(img, "film", roll) end
 G.group_images(all, { timing = true, gap = 2, camera = false, refine = false, write_tags = true, trace_tags = false, native_groups = true })
 click("Clear Grouping Marks", { jpeg1, jpeg2, jpeg3 })
 check("clear, JPEGs only: the toast counts the unselected RAW", last_print(),
-    "Assisted Grouping: cleared grouping marks from 4 images, 1 of them unselected RAW/JPEG partners.")
+    "Assisted Grouping: Cleared grouping marks from 4 images, 1 of them unselected RAW/JPEG partners.")
 check("clear, JPEGs only: the RAW's group tag is gone too", group_tag_count(raw1), 0)
 check("clear, JPEGs only: the RAW is stacked with its JPEG again", raw1.group == jpeg1.group and jpeg2.group ~= jpeg1.group, true)
 check("clear, JPEGs only: the ledger forgets the RAW", ledger_text():find('"' .. raw1.id .. '"', 1, true), nil)
 
 click("Clear Grouping Marks", all)
-check("clear, nothing left: says so", last_print(), "Assisted Grouping: nothing to clear; the selection has no grouping marks.")
+check("clear, nothing left: says so", last_print(), "Assisted Grouping: Nothing to clear; the selection has no grouping marks.")
 check("clear, nothing left: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
 
 -- Verify Selection ------------------------------------------------------------------
@@ -575,7 +575,7 @@ click("Verify Selection", all)
 check("verify: writes no group and no tag", string.format("%d %d %s", group_writes, group_tag_count(jpeg1),
     tostring(ledger_text() == ledger_before)), "0 0 true")
 check("verify: the toast counts what differs", last_print(),
-    "Assisted Grouping: verify only, nothing changed. 4 of 4 images differ from a fresh Group Selection run, 0 are in a group with no leader inside it.")
+    "Assisted Grouping: Verify only, nothing changed. 4 of 4 images differ from a fresh Group Selection run, 0 are in a group with no leader inside it.")
 check("verify: one row for the photos a fresh run would change, with Fix = Group Selection",
     (read_file(CHECKS_FILE) or ""):find("Verify Selection\t4 photos differ from a fresh Group Selection run with these settings. Fix runs Group Selection on them.\t", 1, true) ~= nil, true)
 check("verify: the lone frame's reason is its missing Group tag",
@@ -659,7 +659,7 @@ check("presets: export is offered for a saved preset", choose(actions, "export p
 widget_where(panel, "file_chooser_button", "title", "Folder to Export the Preset Into").value = out
 prints = {}
 button(panel, "Export").clicked_callback()
-check("presets: export toast", last_print(), "Assisted Grouping: preset \"Rally\" exported to " .. out .. "/Rally.atpreset")
+check("presets: export toast", last_print(), "Assisted Grouping: Preset \"Rally\" exported to " .. out .. "/Rally.atpreset.")
 local saved = read_file(ROOT .. "/config/assisted_grouping/presets/Rally.json")
 check("presets: the bundle's preset.json is the saved preset", read_file(out .. "/Rally.atpreset/preset.json") == saved and saved ~= nil, true)
 check("presets: the manifest names the plugin and files",
@@ -674,7 +674,7 @@ widget_where(panel, "file_chooser_button", "title", "Preset Bundle (.atpreset Fo
 prints = {}
 button(panel, "Import").clicked_callback()
 check("presets: import keeps the existing Rally and adds Rally (2)", last_print(),
-    "Assisted Grouping: imported \"Rally (2)\" from " .. out .. "/Rally.atpreset (\"Rally\" was taken); pick it in the preset list")
+    "Assisted Grouping: Imported \"Rally (2)\" from " .. out .. "/Rally.atpreset (\"Rally\" was taken). Pick it in the preset list.")
 check("presets: Rally (2) holds the bundle's settings", read_file(ROOT .. "/config/assisted_grouping/presets/Rally (2).json"), saved)
 check("presets: Rally (2) is in the preset list", choose(widget_where(panel, "combobox", "label", "Preset"), "Rally (2)"), true)
 
@@ -682,8 +682,8 @@ write_file(out .. "/Rally.atpreset/manifest.json",
     '{"version": 1, "plugin": "assisted_culling", "preset": "Rally", "files": "preset.json"}')
 prints = {}
 button(panel, "Import").clicked_callback()
-check("presets: a culling bundle is refused", last_print(), "Assisted Grouping: the bundle is for assisted_culling, not this plugin")
-local burst_hint = widget_where(panel, "label", "label", "Select whole bursts ?") or {}
+check("presets: a culling bundle is refused", last_print(), "Assisted Grouping: The bundle is for assisted_culling, not this plugin.")
+local burst_hint = widget_where(panel, "label", "label", "Select whole bursts, or the whole shoot.") or {}
 check("the partial-burst hint is one short line, its reason in the tooltip",
     tostring(burst_hint.tooltip):find("selecting part of a burst splits it", 1, true) ~= nil, true)
 check("the whole session has no Lua error", lua_errors(), nil)

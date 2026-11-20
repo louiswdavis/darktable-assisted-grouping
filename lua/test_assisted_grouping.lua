@@ -18,7 +18,7 @@ end
 -- plugin_common.lua ---------------------------------------------------------------
 -- The same file in all three plugin repos; COMMON_HASH pins it. After changing it, copy it to the
 -- other two repos and put the hash this prints into their tests too.
-local COMMON_HASH = "4d70ce0d"
+local COMMON_HASH = "2a252913"
 local PC = dofile(script_dir .. "/plugin_common.lua")
 local function fnv1a(text)
     local h = 2166136261
@@ -798,7 +798,7 @@ local toggles_ok = true
 for _, t in ipairs(A.TAG_TOGGLES) do if not kinds[t.kind] then toggles_ok = false end end
 check("TAG_TOGGLES: every row has a kind in TAG_KINDS", toggles_ok, true)
 check("NOTICE_TAGS_OFF names Group Tags", A.NOTICE_TAGS_OFF,
-    "turn on Group Tags, or this run's groups aren't saved for the next run to start from")
+    "Turn on Group Tags, or this run's groups aren't saved for the next run to start from.")
 
 check("panel_notice: fine is empty", A.panel_notice(panel()), "")
 check("panel_notice: both outputs off", A.panel_notice(panel({ write_tags = false, native_groups = false })), A.ERR_NO_OUTPUT)
