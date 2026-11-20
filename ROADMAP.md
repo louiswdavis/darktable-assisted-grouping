@@ -26,9 +26,10 @@ Grouping doesn't need to stay time-only; it can use different signals from the o
 
 ## Group size
 
+- **Minimum burst size (built 2026-11-18, awaiting a Windows run):** `min_burst_size`, default 2 (as before)
 - **Large-group warning**: a group over N frames is flagged, because one oversized group hides several cars
 - **Similarity slider**: one setting from "split more" to "join more"
-- **Partial-burst check**: the done message reports bursts that look cut short (a gap mid-sequence), instead of the current fixed warning
+- **Partial-burst check**: the done message reports bursts that look cut short (a gap mid-sequence), instead of the current fixed warning. Part built 2026-11-18: the log lists the 10 widest time gaps inside groups (`weakest links`); no crop distance yet
 
 ## Better timing
 
@@ -37,9 +38,12 @@ Today bursts split at a fixed gap (`BURST_GAP_SECONDS` = 2 in `lua/assisted_grou
 - **Time cuts, then a visual check.** Cut by time first, then compare the frames on each side of a cut (and inside long groups) and join or split on how alike they look (Kodak patent US6351556; Gozali et al. 2012). Shares the embedding work with "Split on car change". Effort M.
 - **More cameras' sub-second times**: read sub-second timestamps from more makers' metadata
 - **Visual-neighbour fallback**: when times are missing or tied, join frames that look alike
-- **UTC run stamps**: write run times in UTC, so a laptop changing time zone doesn't reorder runs
+- **UTC run stamps (built, ticket 50)**: run times are written in UTC, so a laptop changing time zone doesn't reorder runs
+- **Metadata cut hints (built 2026-11-18, log only)**: `cut hints:` lines where focal length, focus distance or exposure jumps between neighbours (`M.CUT_HINT_RATIO`, thresholds guessed); no group changes
 
 ## Sessions above bursts
+
+**Time layer built 2026-11-18, awaiting a Windows run:** `session_gap_minutes` (0 = off) writes `Session|NNNN` tags. Named sessions and per-session culling caps are not built.
 
 A day at a circuit or hillclimb has sessions (practice, runs, races) separated by long gaps.
 - a second layer of groups: gaps over N minutes (setting, or the adaptive-gap valley at a
@@ -117,5 +121,4 @@ and COMMON_HASH change together. Effort S here once the shared part exists.
 ## Smaller known gaps
 
 - **Diagnostic tags switch**: turn the diagnostic tags off for a clean tag list
-- **Minimum darktable version**: check it at load and say which version is needed
-- **README is stale**: it says the other plugins "can later read groups"; they already do
+- **Minimum darktable version**: the plugin checks Lua API 7.0.0 at load; the darktable version that maps to has not been confirmed
