@@ -475,12 +475,12 @@ check("clear, cancelled: the job bar is closed", jobs[1].valid, false)
 -- To check: the photos the cancelled clear didn't reach
 local to_check = panel[#panel - 2]
 check("To check sits above the warning lines, outside the folding pages",
-    type(to_check) == "table" and to_check[1] and to_check[1][1] and to_check[1][1].label, "To check")
-to_check = type(to_check) == "table" and to_check[1] and to_check[1][1] and to_check[1][1].label == "To check" and to_check or { {}, {} }
+    type(to_check) == "table" and to_check[1] and to_check[1][2] and to_check[1][2].label, "To check")
+to_check = type(to_check) == "table" and to_check[1] and to_check[1][2] and to_check[1][2].label == "To check" and to_check or { {}, {} }
 local CHECKS_FILE = ROOT .. "/config/assisted_grouping.checks.txt"
 check("To check: the cancelled clear shows in the box", to_check.visible, true)
 check("To check: the row names the action and the count",
-    ((to_check[2][1] or {}).label or ""):gsub("\n", " "), "Clear: clear cancelled: 39 photos not reached keep their marks")
+    ((to_check[2][1] or {}).text or ""):gsub("\n", " "), "Clear: clear cancelled: 39 photos not reached keep their marks")
 check("To check: the item is saved for a restart",
     (read_file(CHECKS_FILE) or ""):find("Clear\tclear cancelled: 39 photos not reached keep their marks\t", 1, true) ~= nil, true)
 selection_sets = 0
@@ -497,7 +497,7 @@ click("Group selection", burst)
 click("Clear grouping marks", burst)
 dt.control.sleep = function() end
 check("To check: a second cancelled clear fills the box again", to_check.visible, true)
-;(button(to_check, "Clear") or { clicked_callback = function() end }).clicked_callback()
+;(button(to_check, "Clear list") or { clicked_callback = function() end }).clicked_callback()
 check("To check: Clear empties the box", to_check.visible, false)
 check("To check: Clear empties the saved list", read_file(CHECKS_FILE), "")
 click("Clear grouping marks", burst)
@@ -554,7 +554,7 @@ check("clear, nothing left: says so", last_print(), "Assisted Grouping: nothing 
 check("clear, nothing left: the job bar is closed", #jobs == 1 and jobs[1].valid, false)
 
 -- Verify selection ------------------------------------------------------------------
-;(button(to_check, "Clear") or { clicked_callback = function() end }).clicked_callback()
+;(button(to_check, "Clear list") or { clicked_callback = function() end }).clicked_callback()
 -- A group whose leader is gone (no image 999): darktable still lists the image in it.
 jpeg3.group = 999
 group_writes = 0
@@ -649,6 +649,9 @@ write_file(out .. "/Rally.atpreset/manifest.json",
 prints = {}
 button(panel, "Import").clicked_callback()
 check("presets: a culling bundle is refused", last_print(), "Assisted Grouping: the bundle is for assisted_culling, not this plugin")
+local burst_hint = widget_where(panel, "label", "label", "Select whole bursts ?") or {}
+check("the partial-burst hint is one short line, its reason in the tooltip",
+    tostring(burst_hint.tooltip):find("selecting part of a burst splits it", 1, true) ~= nil, true)
 check("the whole session has no Lua error", lua_errors(), nil)
 check("print_hinter is never called", printed("print_hinter"), false)
 

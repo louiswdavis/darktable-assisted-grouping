@@ -219,7 +219,7 @@ A box below the pages lists what a run leaves for you to look at, so a toast tha
   - `N photos differ from a fresh Group selection run with these settings. Fix runs Group selection on them.` Its details list each photo with its reasons: `darktable group differs`, `no Group tag` or `Group tag differs` (the last two only with Group tags on). A group of one, or a Group tag with no darktable group behind it, shows up here too.
   - `N photos are in a darktable group whose leader is missing or outside it. Fix makes the group's lowest image its leader.` Fix leaves the group's members as they are and only sets its leader.
 - **Select** beside a line selects its photos in the lighttable. Photos removed from the library since are skipped, and a toast counts them.
-- The next run of the same action replaces that action's lines; other actions' lines stay. **Clear** empties the box.
+- The next run of the same action replaces that action's lines; other actions' lines stay. **Clear list**, under the items, empties the box.
 - Six lines show; more add `and N more (see the log)`. The list is saved to `assisted_grouping.checks.txt` in darktable's config folder, so it survives a restart.
 - A cancel that changed nothing adds no line. The partial-burst warning stays as standing guidance below the box.
 

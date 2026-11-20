@@ -128,6 +128,7 @@ ok   presets: import keeps the existing Rally and adds Rally (2)
 ok   presets: Rally (2) holds the bundle's settings
 ok   presets: Rally (2) is in the preset list
 ok   presets: a culling bundle is refused
+ok   the partial-burst hint is one short line, its reason in the tooltip
 ok   the whole session has no Lua error
 ok   print_hinter is never called
 

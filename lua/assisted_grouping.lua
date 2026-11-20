@@ -2487,8 +2487,7 @@ local function copy_images(images)
 end
 
 -- Culling's partial-burst warning. GTK labels here don't wrap, so the lines are broken by hand.
-local PARTIAL_BURST_WARNING = "Bursts are grouped from the selected\nframes only, so selecting part of a\n"
-    .. "burst splits it. Select whole bursts,\nor the whole shoot."
+local PARTIAL_BURST_WARNING = "Select whole bursts ?"
 
 local function install_panel()
     if M.module_installed then return end
@@ -2677,6 +2676,7 @@ local function install_panel()
     local warning_label = new_widget("label") {
         label = PARTIAL_BURST_WARNING,
         halign = "start",
+        tooltip = "Bursts are grouped from the selected photos only, so selecting part of a burst splits it. Select whole bursts, or the whole shoot.",
     }
     clear_button = new_widget("button") {
         label = "Clear grouping marks",
