@@ -2033,7 +2033,7 @@ function M.group_images(images, opts)
             local n_has = M.count_tagged(units, opts.tag)
             log(string.format("tag layer: %d of %d frames have %s", n_has, #units, opts.tag))
             if n_has == 0 then
-                note = string.format(" No selected photo has the tag %s, so it split nothing; check its spelling and spaces.", opts.tag)
+                note = string.format(" No selected image has the tag %s, so it split nothing; check its spelling and spaces.", opts.tag)
             end
         end
         local timing_label = opts.timing == false and "timing off"
@@ -2546,7 +2546,7 @@ local function install_panel()
         text = "",
     }
     local parent_entry = new_widget("entry") {
-        tooltip = "Divide each group by which tag directly under this node a image carries. Images with none, or several, aren't split off: they stay with the group's first part (the log counts them). Empty = off. Example: Cars|Number. Type the Assisted Tagging prefix (e.g. Rally|2026) to split bursts by car number.",
+        tooltip = "Divide each group by which tag directly under this node an image carries. Images with none, or several, aren't split off: they stay with the group's first part (the log counts them). Empty = off. Example: Cars|Number. Type the Assisted Tagging prefix (e.g. Rally|2026) to split bursts by car number.",
         placeholder = "parent tag, e.g. Cars|Number",
         text = "",
     }
