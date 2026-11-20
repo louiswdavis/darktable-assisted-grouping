@@ -653,10 +653,10 @@ choose(actions, "store new preset…")
 entry(panel, "preset name").text = "Rally"
 button(panel, "OK").clicked_callback()
 check("presets: Rally is stored", read_file(ROOT .. "/config/assisted_grouping/presets/Rally.json") ~= nil, true)
-local out = ROOT .. "/export"
-make_dir(out)
+-- bundles always go to <plugin folder>/exports; no folder to pick
+local out = ROOT .. "/plugins/darktable-assisted-grouping/exports"
 check("presets: export is offered for a saved preset", choose(actions, "export preset…"), true)
-widget_where(panel, "file_chooser_button", "title", "Folder to Export the Preset Into").value = out
+check("presets: export has no folder chooser", widget_where(panel, "file_chooser_button", "title", "Folder to Export the Preset Into"), nil)
 prints = {}
 button(panel, "Export").clicked_callback()
 check("presets: export toast", last_print(), "Assisted Grouping: Preset \"Rally\" exported to " .. out .. "/Rally.atpreset.")
@@ -667,7 +667,8 @@ check("presets: the manifest names the plugin and files",
     and (read_file(out .. "/Rally.atpreset/manifest.json") or ""):find('"files": "preset.json"', 1, true) ~= nil, true)
 prints = {}
 button(panel, "Export").clicked_callback()
-check("presets: a second export into the same folder is refused", last_print():find("already exists", 1, true) ~= nil, true)
+check("presets: a second export takes a free name", last_print(), "Assisted Grouping: Preset \"Rally\" exported to " .. out .. "/Rally (2).atpreset.")
+check("presets: the second bundle is written", read_file(out .. "/Rally (2).atpreset/preset.json") == saved, true)
 
 check("presets: import is offered", choose(actions, "import preset…"), true)
 widget_where(panel, "file_chooser_button", "title", "Preset Bundle (.atpreset Folder)").value = out .. "/Rally.atpreset"

@@ -122,10 +122,12 @@ ok   Tools page: browse, fix by hand, then Undo
 ok   the warning and notice lines sit at the foot of the panel, outside the folding pages
 ok   presets: Rally is stored
 ok   presets: export is offered for a saved preset
+ok   presets: export has no folder chooser
 ok   presets: export toast
 ok   presets: the bundle's preset.json is the saved preset
 ok   presets: the manifest names the plugin and files
-ok   presets: a second export into the same folder is refused
+ok   presets: a second export takes a free name
+ok   presets: the second bundle is written
 ok   presets: import is offered
 ok   presets: import keeps the existing Rally and adds Rally (2)
 ok   presets: Rally (2) holds the bundle's settings
