@@ -598,6 +598,40 @@ local function widget_where(widget, kind, field, value)
     return nil
 end
 
+local placed, twice = {}, {}
+local function walk_widgets(widget)
+    if type(widget) ~= "table" or not widget.kind then return end
+    if placed[widget] then twice[#twice + 1] = tostring(widget.label or widget.kind) end
+    placed[widget] = true
+    for _, child in ipairs(widget) do walk_widgets(child) end
+end
+walk_widgets(panel)
+check("no widget is placed twice in the panel", table.concat(twice, ", "), "")
+-- the box below the page button titled `title` (C.paged_sections: button, body, button, body…)
+local function page_body(widget, title)
+    if type(widget) ~= "table" then return nil end
+    for i, child in ipairs(widget) do
+        if type(child) == "table" and child.kind == "button" and type(child.label) == "string"
+            and child.label:match("^%d+  " .. title .. " ") then return widget[i + 1] end
+        local found = page_body(child, title)
+        if found then return found end
+    end
+    return nil
+end
+-- every button under `box`, nested boxes included, in panel order
+local function button_labels(box, out)
+    out = out or {}
+    for _, w in ipairs(box or {}) do
+        if type(w) == "table" and w.kind == "button" then out[#out + 1] = w.label
+        elseif type(w) == "table" then button_labels(w, out) end
+    end
+    return table.concat(out, ", ")
+end
+check("Run page: model runs only, main button first",
+    button_labels(page_body(panel, "Run")), "Group Selection, Verify Selection")
+check("Tools page: browse, fix by hand, then Undo",
+    button_labels(page_body(panel, "Tools")), "Bursts, Pairs, Merge Groups, Clear Grouping Marks")
+
 check("the warning and notice lines sit at the foot of the panel, outside the folding pages",
       panel[#panel - 1].kind .. "," .. panel[#panel].kind, "label,label")
 

@@ -2557,7 +2557,7 @@ local function install_panel()
     }
     local tags_check = new_widget("check_button") {
         label = "Group Tags",
-        tooltip = "Tag each photo with its Group under Assisted Grouping|<run time>|Group|... One tag per final group. Needed for start from last run's groups and for browse as bursts (page 4). Default: off; slower on a large selection.",
+        tooltip = "Tag each photo with its Group under Assisted Grouping|<run time>|Group|... One tag per final group. Needed for start from last run's groups and for browse as bursts (page 5). Default: off; slower on a large selection.",
         value = false,
         clicked_callback = function() changed(); refresh_notice() end,
     }
@@ -2773,6 +2773,8 @@ local function install_panel()
             new_widget("section_label") { label = "Group (Uses Pages 1 to 3)" },
             group_button,
             verify_button,
+        },
+        {
             new_widget("section_label") { label = "Browse As (darktable Groups Only; Tags Kept)" },
             new_widget("box") {
                 orientation = "horizontal",
@@ -2781,8 +2783,6 @@ local function install_panel()
             },
             new_widget("section_label") { label = "Fix by Hand (Kept on the Next Run)" },
             merge_button,
-        },
-        {
             new_widget("section_label") { label = "Undo" },
             clear_button,
         },

@@ -197,15 +197,17 @@ A notice line below the pages says what would stop or undermine the next run, in
 
 ### 4 Run
 
-Two headings, **Group (Uses Pages 1 to 3)** and **browse as**.
+The page holds the grouping run and its check, under **Group (Uses Pages 1 to 3)**.
 
 - **Group Selection.** Runs the layers on the selected photos and writes the outputs that are on. After the `… frames in … groups` line the log lists each group's weakest link, widest first (the ten widest): `group 0003: 12 frames, 1.80 s before DSC00042.JPG` means group 3's largest time gap between neighbouring frames is 1.80 s, just before that file. The frame count is the whole group, including frames with no capture time. A gap close to the burst gap marks a group that may hold two bursts; lower the gap or split it by hand. After that come the cut hints (the first ten, by group): `group 0003 before DSC00042.JPG: focal length 70 to 200 mm` means the lens or exposure setting jumped between that file and the frame before it inside one group. A jump is focal length changing by 1.5× or more, exposure time by 4× (two stops) or more, or focus distance by 2× or more; a setting darktable has no value for is skipped. Hints are log lines only and change no group.
 - **Verify Selection.** Checks the selected photos against a fresh **Group Selection** run with the current settings, and writes nothing: no tag, no darktable group, no ledger change. The toast says "verify only, nothing changed. N of M images differ from a fresh Group Selection run, K are in a group with no leader inside it." Each finding goes to [To check](#to-check). Frames a re-run would skip as hand-made (hand-made darktable groups, or frames you moved) count as correct and are left out, tags too.
-- **browse as** (darktable groups only; tags are kept), with two buttons. **Bursts** puts the selected photos back into darktable groups from each photo's newest `Group` tag; with no group tags it says "nothing to browse. The selection has no group tags; run Group Selection with Group Tags on first.". **Pairs** ungroups the selected photos and their groups, then stacks each RAW with its JPEG again; tags stay. See [Re-running and clearing](#re-running-and-clearing).
-- **Merge Groups** (under "fix by hand"). Joins the darktable groups of the selected photos into one, for a burst the run split: select one image of each group. The merged group counts as made by hand, so **Group Selection** keeps it and **Clear Grouping Marks** leaves it; tags stay. **Pairs** takes it apart again. With images from only one group it says "nothing to merge".
 
 ### 5 Tools
 
+Hand fixes and undo; nothing is run again. The page has three groups: **Browse As**, **Fix by Hand** and **Undo**.
+
+- **Browse As** (darktable groups only; tags are kept), with two buttons. **Bursts** puts the selected photos back into darktable groups from each photo's newest `Group` tag; with no group tags it says "nothing to browse. The selection has no group tags; run Group Selection with Group Tags on first.". **Pairs** ungroups the selected photos and their groups, then stacks each RAW with its JPEG again; tags stay. See [Re-running and clearing](#re-running-and-clearing).
+- **Merge Groups** (under **Fix by Hand**). Joins the darktable groups of the selected photos into one, for a burst the run split: select one image of each group. The merged group counts as made by hand, so **Group Selection** keeps it and **Clear Grouping Marks** leaves it; tags stay. **Pairs** takes it apart again. With images from only one group it says "nothing to merge".
 - **Clear Grouping Marks** (under **Undo**). Removes the plugin's tags and darktable groups from the selected photos (see [Re-running and clearing](#re-running-and-clearing)).
 
 Everything in sections 1 to 3 is saved with the [preset](#presets).
