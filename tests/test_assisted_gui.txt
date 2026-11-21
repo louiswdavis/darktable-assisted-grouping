@@ -126,7 +126,7 @@ ok   presets: export has no folder chooser
 ok   presets: export toast
 ok   presets: the bundle's preset.json is the saved preset
 ok   presets: the manifest names the plugin and files
-ok   presets: a second export of an unchanged preset is skipped
+FAIL presets: a second export of an unchanged preset is skipped: got Assisted Grouping: Preset "Rally" re-exported, replacing /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/ag_gui_test_1795219374_689610/plugins/darktable-assisted-grouping/exports/Rally.atpreset., want Assisted Grouping: Preset "Rally" is already exported and unchanged: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/ag_gui_test_1795219374_689610/plugins/darktable-assisted-grouping/exports/Rally.atpreset.
 ok   presets: no numbered copy is made
 ok   presets: a changed preset replaces its bundle
 ok   presets: the replaced bundle holds the new preset
@@ -140,4 +140,4 @@ ok   the partial-burst hint is one short line, its reason in the tooltip
 ok   the whole session has no Lua error
 ok   print_hinter is never called
 
-all passed (0 failed)
+FAILED (1 failed)

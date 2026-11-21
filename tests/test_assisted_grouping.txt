@@ -1,4 +1,4 @@
-FAIL plugin_common.lua matches COMMON_HASH (copy it to the other repos after a change): got 0120e05b, want 6a57e7b8
+ok   plugin_common.lua matches COMMON_HASH (copy it to the other repos after a change)
 ok   count: 0 is plural
 ok   count: 1 is singular
 ok   count: 2 is plural
@@ -366,4 +366,4 @@ ok   preset schema: start_from accepts only its choices
 ok   preset schema: decimal gap kept
 ok   PANEL_PAGES: every preset key is on one page or listed off-stack
 ok   PANEL_PAGES: titles match the README sections
-1 failure(s)
+all passed
