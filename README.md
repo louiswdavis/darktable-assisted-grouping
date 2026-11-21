@@ -30,8 +30,12 @@ It is the third plugin next to `darktable-assisted-tagging` and `darktable-assis
 
 - darktable built with Lua (the official builds are). The plugin only checks for Lua API 7.0.0 or later; the minimum darktable version has not been confirmed.
 - Python 3.9+ with `Pillow` and `exifread` (`python/requirements.txt`). `exifread` reads RAW (ARW) files Pillow can't open; without it, RAWs fall back to borrowing from their JPEG. Without Python the plugin still runs, at whole-second precision.
+- Windows: `git` and `curl` (Windows 10+ ships `curl`). Linking the plugin needs Developer Mode on (`Win + R`, then `ms-settings:developers`) or an Administrator prompt; without either, copy the files instead (step 2).
 
 ## Install
+
+Do the steps in order: Python, darktable, plugins folder.
+Commands come first under each step; the reasons follow them.
 
 ### 1. Python side
 
@@ -50,35 +54,59 @@ python3 -m venv .venv
 
 ### 2. darktable side
 
-darktable's config directory is `~/.config/darktable` on Linux/macOS and `%LOCALAPPDATA%\darktable` on Windows. Link the plugin into it and load it from `luarc`.
-
-The plugin is `lua/assisted_grouping.lua` plus `lua/plugin_common.lua`, the module the three Assisted plugins share. A link into the repo finds the module beside the plugin by itself.
+Run these from the repo root, the folder holding `README.md`. darktable's config directory is `~/.config/darktable` on Linux/macOS and `%LOCALAPPDATA%\darktable` on Windows.
 
 Linux / macOS:
 
 ```
 mkdir -p ~/.config/darktable/lua/contrib
 ln -s "$(pwd)/lua/assisted_grouping.lua" ~/.config/darktable/lua/contrib/assisted_grouping.lua
-echo 'require "contrib/assisted_grouping"' >> ~/.config/darktable/luarc
+ln -s "$(pwd)/lua/plugin_common.lua" ~/.config/darktable/lua/contrib/plugin_common.lua
+echo 'do local ok, e = pcall(require, "contrib/assisted_grouping"); local f = io.open(require("darktable").configuration.config_dir .. "/dt-lua-errors.txt", "a"); f:write("assisted_grouping ", ok and "loaded" or ("FAILED " .. tostring(e)), "\n"); f:close() end' >> ~/.config/darktable/luarc
 ```
 
-Windows (Command Prompt). Creating symbolic links needs an Administrator prompt unless Developer Mode is enabled.
+Windows (Command Prompt), links. These need Developer Mode on (`Win + R`, then `ms-settings:developers`) or an Administrator prompt:
 
 ```
 if not exist "%LOCALAPPDATA%\darktable\lua\contrib" mkdir "%LOCALAPPDATA%\darktable\lua\contrib"
 mklink "%LOCALAPPDATA%\darktable\lua\contrib\assisted_grouping.lua" "%CD%\lua\assisted_grouping.lua"
-echo require "contrib/assisted_grouping" >> "%LOCALAPPDATA%\darktable\luarc"
+mklink "%LOCALAPPDATA%\darktable\lua\contrib\plugin_common.lua" "%CD%\lua\plugin_common.lua"
 ```
 
-Windows (PowerShell). Same Administrator caveat.
+Windows (Command Prompt), copies instead of links. Use this with neither Developer Mode nor Administrator, and re-run it after every update:
+
+```
+if not exist "%LOCALAPPDATA%\darktable\lua\contrib" mkdir "%LOCALAPPDATA%\darktable\lua\contrib"
+copy /Y lua\assisted_grouping.lua "%LOCALAPPDATA%\darktable\lua\contrib\"
+copy /Y lua\plugin_common.lua "%LOCALAPPDATA%\darktable\lua\contrib\"
+```
+
+Windows (Command Prompt), the `luarc` line (after either of the two blocks above):
+
+```
+echo do local ok, e = pcall(require, "contrib/assisted_grouping"); local f = io.open(require("darktable").configuration.config_dir .. "/dt-lua-errors.txt", "a"); f:write("assisted_grouping ", ok and "loaded" or ("FAILED " .. tostring(e)), "\n"); f:close() end >> "%LOCALAPPDATA%\darktable\luarc"
+```
+
+Windows (PowerShell), links and the `luarc` line. Same Developer Mode or Administrator need:
 
 ```
 New-Item -ItemType Directory -Force "$env:LOCALAPPDATA\darktable\lua\contrib"
 New-Item -ItemType SymbolicLink -Path "$env:LOCALAPPDATA\darktable\lua\contrib\assisted_grouping.lua" -Value "$PWD\lua\assisted_grouping.lua"
-Add-Content "$env:LOCALAPPDATA\darktable\luarc" 'require "contrib/assisted_grouping"'
+New-Item -ItemType SymbolicLink -Path "$env:LOCALAPPDATA\darktable\lua\contrib\plugin_common.lua" -Value "$PWD\lua\plugin_common.lua"
+Add-Content "$env:LOCALAPPDATA\darktable\luarc" 'do local ok, e = pcall(require, "contrib/assisted_grouping"); local f = io.open(require("darktable").configuration.config_dir .. "/dt-lua-errors.txt", "a"); f:write("assisted_grouping ", ok and "loaded" or ("FAILED " .. tostring(e)), "\n"); f:close() end'
 ```
 
-Windows without Administrator rights or Developer Mode: copy `assisted_grouping.lua` into `%LOCALAPPDATA%\darktable\lua\contrib` instead of linking it, and add the same `luarc` line. Re-copy it after every update. The **plugins folder** preference (next step) still points the plugin at this repo for the Python side, and the plugin loads `plugin_common.lua` from that folder's `darktable-assisted-grouping/lua/` when the module is not beside the copied file (copy it too if you want darktable to start with the preference unset; the three plugins' copies are identical, so one copy in `contrib` serves all of them).
+Then restart darktable and open `dt-lua-errors.txt` in the config directory. `assisted_grouping loaded` means it worked: the panel appears in lighttable once the view has finished loading. `assisted_grouping FAILED ...` gives the reason.
+
+**Why these steps.**
+
+- The plugin is two files, and both must sit in `lua/contrib`: `lua/assisted_grouping.lua` and `lua/plugin_common.lua`. `plugin_common.lua` is the module the three Assisted plugins share. The three copies are identical, so one copy serves all three; if another Assisted plugin already put it there, the second `ln -s` or `mklink` fails with "already exists", which is harmless.
+- Without `plugin_common.lua` the plugin fails with `module 'plugin_common' not found`.
+- `plugin_common.lua` has no `luarc` line. It is not a plugin: the plugin loads it with `loadfile`, looking beside itself first, then in the **plugins folder** preference. Nothing copies it for you, and on a new device the preference does not exist yet (it is registered only after the plugin loads), so put it in `lua/contrib`. Your `luarc` shows one line per plugin and none for `plugin_common`, which is correct. Installing just this one plugin? Still do both file steps. Installing more than one? Do the `plugin_common.lua` step once; a repeat is harmless.
+- The `luarc` line loads the plugin inside `pcall` and appends `loaded` or `FAILED <reason>` to `dt-lua-errors.txt`, so a plugin that does not appear says why. Each Assisted plugin gets its own line with its own name. A plain `require "contrib/assisted_grouping"` line also works but says nothing when it fails.
+- A link into the repo finds `plugin_common.lua` beside the plugin by itself. With the **plugins folder** preference (next step) set, the plugin can also load it from `darktable-assisted-grouping/lua/` in that folder when it is not in `contrib`.
+- Copies must be re-made after every update; links follow the repo.
+- Keep `require "tools/script_manager"` (the scripts panel, from the separate `lua-scripts` repo) on the first line of `luarc`, above the Assisted lines, and append the Assisted lines after it. If the scripts panel is missing, remove the Assisted lines, restart, and add them back one at a time; `dt-lua-errors.txt` shows which one fails.
 
 ### 3. Point the plugin at the repo
 
