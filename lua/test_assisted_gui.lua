@@ -653,46 +653,66 @@ choose(actions, "store new preset…")
 entry(panel, "preset name").text = "Rally"
 button(panel, "OK").clicked_callback()
 check("presets: Rally is stored", read_file(ROOT .. "/config/assisted_grouping/presets/Rally.json") ~= nil, true)
--- bundles always go to <plugin folder>/exports; no folder to pick
+-- bundles always go to <plugin folder>/exports as a zip; no folder to pick
 local out = ROOT .. "/plugins/darktable-assisted-grouping/exports"
+local ZIP = out .. "/Rally.atpreset.zip"
+local function unzip_to(zip, dir)
+    real_execute(WINDOWS and ('rmdir /s /q "' .. dir:gsub("/", "\\") .. '" 2>nul & mkdir "' .. dir:gsub("/", "\\") .. '" & tar -x -f "' .. zip:gsub("/", "\\") .. '" -C "' .. dir:gsub("/", "\\") .. '"')
+        or ("rm -rf '" .. dir .. "' && mkdir -p '" .. dir .. "' && unzip -q '" .. zip .. "' -d '" .. dir .. "'"))
+end
+local function in_zip(zip, name)
+    unzip_to(zip, ROOT .. "/unz")
+    return read_file(ROOT .. "/unz/" .. name)
+end
 check("presets: export is offered for a saved preset", choose(actions, "export preset…"), true)
 check("presets: export has no folder chooser", widget_where(panel, "file_chooser_button", "title", "Folder to Export the Preset Into"), nil)
 prints = {}
 button(panel, "Export").clicked_callback()
-check("presets: export toast", last_print(), "Assisted Grouping: Preset \"Rally\" exported to " .. out .. "/Rally.atpreset.")
+check("presets: export toast", last_print(), "Assisted Grouping: Preset \"Rally\" exported to " .. ZIP .. ".")
 local saved = read_file(ROOT .. "/config/assisted_grouping/presets/Rally.json")
-check("presets: the bundle's preset.json is the saved preset", read_file(out .. "/Rally.atpreset/preset.json") == saved and saved ~= nil, true)
+check("presets: the zip's preset.json is the saved preset", in_zip(ZIP, "preset.json") == saved and saved ~= nil, true)
 check("presets: the manifest names the plugin and files",
-    (read_file(out .. "/Rally.atpreset/manifest.json") or ""):find('"plugin": "assisted_grouping"', 1, true) ~= nil
-    and (read_file(out .. "/Rally.atpreset/manifest.json") or ""):find('"files": "preset.json"', 1, true) ~= nil, true)
+    (in_zip(ZIP, "manifest.json") or ""):find('"plugin": "assisted_grouping"', 1, true) ~= nil
+    and (in_zip(ZIP, "manifest.json") or ""):find('"files": "preset.json"', 1, true) ~= nil, true)
+check("presets: no staging folder is left behind", read_file(out .. "/.staging/preset.json"), nil)
 prints = {}
 button(panel, "Export").clicked_callback()
-check("presets: a second export of an unchanged preset is skipped", last_print(), "Assisted Grouping: Preset \"Rally\" is already exported and unchanged: " .. out .. "/Rally.atpreset.")
-check("presets: no numbered copy is made", read_file(out .. "/Rally (2).atpreset/preset.json"), nil)
+check("presets: a second export of an unchanged preset is skipped", last_print(), "Assisted Grouping: Preset \"Rally\" is already exported and unchanged: " .. ZIP .. ".")
+check("presets: no numbered copy is made", read_file(out .. "/Rally (2).atpreset.zip"), nil)
 local changed = saved .. "\n"
 write_file(ROOT .. "/config/assisted_grouping/presets/Rally.json", changed)
 prints = {}
 button(panel, "Export").clicked_callback()
-check("presets: a changed preset replaces its bundle", last_print(), "Assisted Grouping: Preset \"Rally\" re-exported, replacing " .. out .. "/Rally.atpreset.")
-check("presets: the replaced bundle holds the new preset", read_file(out .. "/Rally.atpreset/preset.json"), changed)
-check("presets: still no numbered copy", read_file(out .. "/Rally (2).atpreset/preset.json"), nil)
+check("presets: a changed preset replaces its zip", last_print(), "Assisted Grouping: Preset \"Rally\" exported to " .. ZIP .. " (replaced the earlier export).")
+check("presets: the replaced zip holds the new preset", in_zip(ZIP, "preset.json"), changed)
+check("presets: still no numbered copy", read_file(out .. "/Rally (2).atpreset.zip"), nil)
 write_file(ROOT .. "/config/assisted_grouping/presets/Rally.json", saved)
 button(panel, "Export").clicked_callback()
 
 check("presets: import is offered", choose(actions, "import preset…"), true)
-widget_where(panel, "file_chooser_button", "title", "Preset Bundle (.atpreset Folder)").value = out .. "/Rally.atpreset"
+widget_where(panel, "file_chooser_button", "title", "Preset Bundle (.atpreset.zip)").value = ZIP
 prints = {}
 button(panel, "Import").clicked_callback()
 check("presets: import keeps the existing Rally and adds Rally (2)", last_print(),
-    "Assisted Grouping: Imported \"Rally (2)\" from " .. out .. "/Rally.atpreset (\"Rally\" was taken). Pick it in the preset list.")
+    "Assisted Grouping: Imported \"Rally (2)\" from " .. ZIP .. " (\"Rally\" was taken). Pick it in the preset list.")
 check("presets: Rally (2) holds the bundle's settings", read_file(ROOT .. "/config/assisted_grouping/presets/Rally (2).json"), saved)
 check("presets: Rally (2) is in the preset list", choose(widget_where(panel, "combobox", "label", "Preset"), "Rally (2)"), true)
+check("presets: the import leaves no temp folder", read_file(out .. "/.import/manifest.json"), nil)
 
-write_file(out .. "/Rally.atpreset/manifest.json",
+unzip_to(ZIP, ROOT .. "/other")
+write_file(ROOT .. "/other/manifest.json",
     '{"version": 1, "plugin": "assisted_culling", "preset": "Rally", "files": "preset.json"}')
+local OTHER = out .. "/Culling.atpreset.zip"
+real_execute(WINDOWS and ('tar -a -c -f "' .. OTHER:gsub("/", "\\") .. '" -C "' .. (ROOT .. "/other"):gsub("/", "\\") .. '" .')
+    or ("(cd '" .. ROOT .. "/other' && zip -qr '" .. OTHER .. "' .)"))
+widget_where(panel, "file_chooser_button", "title", "Preset Bundle (.atpreset.zip)").value = OTHER
 prints = {}
 button(panel, "Import").clicked_callback()
 check("presets: a culling bundle is refused", last_print(), "Assisted Grouping: The bundle is for assisted_culling, not this plugin.")
+widget_where(panel, "file_chooser_button", "title", "Preset Bundle (.atpreset.zip)").value = out .. "/missing.zip"
+prints = {}
+button(panel, "Import").clicked_callback()
+check("presets: a missing zip is refused", last_print(), "Assisted Grouping: " .. out .. "/missing.zip isn't a readable zip.")
 local burst_hint = widget_where(panel, "label", "label", "Select whole bursts, or the whole shoot.") or {}
 check("the partial-burst hint is one short line, its reason in the tooltip",
     tostring(burst_hint.tooltip):find("selecting part of a burst splits it", 1, true) ~= nil, true)
