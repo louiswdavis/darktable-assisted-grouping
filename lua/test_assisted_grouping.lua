@@ -1082,9 +1082,12 @@ do
 end
 check("preset schema: a preset without min_burst_size loads as 2",
     A.preset_merge(A.PRESET_SCHEMA, A.preset_decode('{"burst_gap_seconds": 0.5}')).min_burst_size, 2)
-local readme_file = assert(io.open(script_dir .. "/../README.md", "rb"))
-local README = readme_file:read("a")
-readme_file:close()
+local README = ""
+for _, doc in ipairs({ "README.md", "docs/usage.md", "docs/panel-options.md", "docs/how-it-works.md", "docs/testing.md" }) do
+    local doc_file = assert(io.open(script_dir .. "/../" .. doc, "rb"))
+    README = README .. doc_file:read("a")
+    doc_file:close()
+end
 local quoted = {}
 for _, message in ipairs({ A.ERR_BAD_GAP, A.ERR_BAD_MIN_SIZE, A.ERR_BAD_SESSION_GAP, A.NOTICE_SESSION_TAGS_OFF }) do
     quoted[#quoted + 1] = tostring(README:find(message, 1, true) ~= nil)
