@@ -74,7 +74,7 @@ ok   To check sits above the warning lines, outside the folding pages
 ok   To check: the cancelled clear shows in the box
 ok   To check: the row names the action and the count
 ok   To check: the item is saved for a restart
-ok   To check: Select selects the photos not reached
+ok   To check: Select selects the images not reached
 ok   clear, after a cancel: the next clear finishes the rest
 ok   clear, after a cancel: the frames are alone again
 ok   To check: the next clear replaces its items
@@ -106,15 +106,15 @@ ok   clear, JPEGs only: the ledger forgets the RAW
 ok   clear, nothing left: says so
 ok   clear, nothing left: the job bar is closed
 ok   verify: says it started
-ok   verify, no leader: the row names the photo and the Fix
+ok   verify, no leader: the row names the image and the Fix
 ok   verify, no leader: nothing is written
 ok   verify, no leader: Fix makes the lowest image the leader
 ok   verify, after Fix: no row
 ok   verify: writes no group and no tag
 ok   verify: the toast counts what differs
-ok   verify: one row for the photos a fresh run would change, with Fix = Group Selection
+ok   verify: one row for the images a fresh run would change, with Fix = Group Selection
 ok   verify: the lone frame's reason is its missing Group tag
-ok   verify, Fix: Group Selection ran on those photos
+ok   verify, Fix: Group Selection ran on those images
 ok   verify, after Fix: no row, the box hides
 ok   no widget is placed twice in the panel
 ok   Run page: model runs only, main button first
@@ -126,8 +126,11 @@ ok   presets: export has no folder chooser
 ok   presets: export toast
 ok   presets: the bundle's preset.json is the saved preset
 ok   presets: the manifest names the plugin and files
-ok   presets: a second export takes a free name
-ok   presets: the second bundle is written
+ok   presets: a second export of an unchanged preset is skipped
+ok   presets: no numbered copy is made
+ok   presets: a changed preset replaces its bundle
+ok   presets: the replaced bundle holds the new preset
+ok   presets: still no numbered copy
 ok   presets: import is offered
 ok   presets: import keeps the existing Rally and adds Rally (2)
 ok   presets: Rally (2) holds the bundle's settings

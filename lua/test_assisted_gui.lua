@@ -667,8 +667,17 @@ check("presets: the manifest names the plugin and files",
     and (read_file(out .. "/Rally.atpreset/manifest.json") or ""):find('"files": "preset.json"', 1, true) ~= nil, true)
 prints = {}
 button(panel, "Export").clicked_callback()
-check("presets: a second export takes a free name", last_print(), "Assisted Grouping: Preset \"Rally\" exported to " .. out .. "/Rally (2).atpreset.")
-check("presets: the second bundle is written", read_file(out .. "/Rally (2).atpreset/preset.json") == saved, true)
+check("presets: a second export of an unchanged preset is skipped", last_print(), "Assisted Grouping: Preset \"Rally\" is already exported and unchanged: " .. out .. "/Rally.atpreset.")
+check("presets: no numbered copy is made", read_file(out .. "/Rally (2).atpreset/preset.json"), nil)
+local changed = saved .. "\n"
+write_file(ROOT .. "/config/assisted_grouping/presets/Rally.json", changed)
+prints = {}
+button(panel, "Export").clicked_callback()
+check("presets: a changed preset replaces its bundle", last_print(), "Assisted Grouping: Preset \"Rally\" re-exported, replacing " .. out .. "/Rally.atpreset.")
+check("presets: the replaced bundle holds the new preset", read_file(out .. "/Rally.atpreset/preset.json"), changed)
+check("presets: still no numbered copy", read_file(out .. "/Rally (2).atpreset/preset.json"), nil)
+write_file(ROOT .. "/config/assisted_grouping/presets/Rally.json", saved)
+button(panel, "Export").clicked_callback()
 
 check("presets: import is offered", choose(actions, "import preset…"), true)
 widget_where(panel, "file_chooser_button", "title", "Preset Bundle (.atpreset Folder)").value = out .. "/Rally.atpreset"

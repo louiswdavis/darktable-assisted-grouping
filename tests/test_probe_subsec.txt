@@ -17,5 +17,5 @@ ok   format_line: blanks where absent
 all tests passed
 
 --- stderr ---
-20:57:45 py: C:\Users\Louis\AppData\Local\Temp\tmp0m2cmz4f\raw.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file 'C:\\Users\\Louis\\AppData\\Local\\Temp\\tmp0m2cmz4f\\raw.arw'; exifread: not installed)
-20:57:45 py: C:\Users\Louis\AppData\Local\Temp\tmp0m2cmz4f\raw.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file 'C:\\Users\\Louis\\AppData\\Local\\Temp\\tmp0m2cmz4f\\raw.arw'; exifread: RuntimeError: corrupt RAW)
+00:01:20 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpav7bp39a/raw.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpav7bp39a/raw.arw'; exifread: not installed)
+00:01:20 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpav7bp39a/raw.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpav7bp39a/raw.arw'; exifread: RuntimeError: corrupt RAW)

@@ -30,7 +30,7 @@ ok   CLI exit code
 ok   CLI with cameras: one precision row per camera, sorted, before the overall line
 
 --- stderr ---
-20:57:44 py: C:\Users\Louis\AppData\Local\Temp\tmp8zkq2cso\missing.jpg: couldn't read the capture time (Pillow: FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\Louis\\AppData\\Local\\Temp\\tmp8zkq2cso\\missing.jpg'; exifread: FileNotFoundError: [Errno 2] No such file or directory: 'C:\\Users\\Louis\\AppData\\Local\\Temp\\tmp8zkq2cso\\missing.jpg')
-C:\Users\Louis\Pictures\DarkTable\Settings\Plugins\darktable-assisted-grouping\.venv\Lib\site-packages\PIL\TiffImagePlugin.py:982: UserWarning: Corrupt EXIF data.  Expecting to read 2 bytes but only got 0. 
+00:01:19 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpfwg3a7x2/missing.jpg: couldn't read the capture time (Pillow: FileNotFoundError: [Errno 2] No such file or directory: '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpfwg3a7x2/missing.jpg'; exifread: FileNotFoundError: [Errno 2] No such file or directory: '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpfwg3a7x2/missing.jpg')
+/Users/louis.davis/Documents/codebases/darktable/darktable-assisted-grouping/.venv/lib/python3.14/site-packages/PIL/TiffImagePlugin.py:982: UserWarning: Corrupt EXIF data.  Expecting to read 2 bytes but only got 0. 
   warnings.warn(str(msg))
-20:57:44 py: C:\Users\Louis\AppData\Local\Temp\tmp8zkq2cso\junk.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file 'C:\\Users\\Louis\\AppData\\Local\\Temp\\tmp8zkq2cso\\junk.arw')
+00:01:20 py: /var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpfwg3a7x2/junk.arw: couldn't read the capture time (Pillow: UnidentifiedImageError: cannot identify image file '/var/folders/nz/vys208qx42q2wqdxhcbhjrf80000gp/T/tmpfwg3a7x2/junk.arw')
